@@ -62,10 +62,7 @@ def main():
                 else:
                     return
                     
-                    
 
-    #if is_raspberrypi():
-    #    is_connected_to_lan()
 
     print("")
 
