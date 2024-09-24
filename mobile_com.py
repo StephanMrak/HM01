@@ -18,7 +18,8 @@ height = '1000px'
 abt=[]
 
 def start_game(gamefile, backgroundqueue,warmupqueue):
-    backgroundqueue.put("close")
+    #backgroundqueue.put("close")
+    hmsysteme.open_game()
     time.sleep(0.5)
     mod_game=(__import__(gamefile))
     print(mod_game)
@@ -32,15 +33,15 @@ def start_game(gamefile, backgroundqueue,warmupqueue):
 def close_game(asd, abt, backgroundqueue):
     for i in range(0,len(asd)):
         if asd[i].is_alive():           
-            hmsysteme.close_pygame()
-            #time.sleep(0.5)
+            hmsysteme.close_game()
+            time.sleep(0.5)
             asd[i].terminate()
             print(asd[i])
     try:
         for i in range(0, len(abt)):
             abt[i].set_text("no function")
             abt[i].set_enabled(False)
-        backgroundqueue.put("open")
+        #backgroundqueue.put("open")
     except:
         pass
 

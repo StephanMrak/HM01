@@ -219,6 +219,7 @@ def main():
 	
 
 	while hmsysteme.game_isactive():
+		#print(os.environ["hm_GameIsActive"])
 		screen.fill(BLACK)
 		font = pygame.font.SysFont(pygame.font.get_fonts()[0], 28)
 		pygame.draw.circle(screen, BLUE, [50, 300 + (40 * (curr_player + 1))], 10, 10)

@@ -59,8 +59,8 @@ def main():
 
     #path = r"C:/Users/flori/Dropbox/Telespiel/Raspi_Programme/HM01_v0.1/"
 
-    #screen = pygame.display.set_mode(size)
-    screen=pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    screen = pygame.display.set_mode(size)
+    #screen=pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     clock = pygame.time.Clock()
     pygame.display.set_caption("Competition")
 

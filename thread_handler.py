@@ -116,18 +116,18 @@ def main():
     ths.start()
     print("mobile hotspot process started")
     
-    t1 = multiprocessing.Process(target=led_calibration_temp.led_calibration_temp, args=("led_calibration_temp",tempqueue))
-    t1.start()
-    print("led calibration process started")
+    #t1 = multiprocessing.Process(target=led_calibration_temp.led_calibration_temp, args=("led_calibration_temp",tempqueue))
+    #t1.start()
+    #print("led calibration process started")
     
     #time.sleep(1)
     t2 = multiprocessing.Process(target=hardware_com.hardware_com, args=("Hardware_com", path, queue, queue4,prequeue,warmupqueue, size))
     t2.start()
     print("hardware_com process started")
 
-    t3 = multiprocessing.Process(target=background.background, args=("background",backgroundqueue,warmupqueue))
-    t3.start()
-    print("background process started")
+    #t3 = multiprocessing.Process(target=background.background, args=("background",backgroundqueue,warmupqueue))
+    #t3.start()
+    #print("background process started")
 
     time.sleep(1)
     t4 = multiprocessing.Process(target=mobile_com.mobile_com, args=("Mobile_com", path, queuegamename, queue, queue2, queue3, queue4, queue5, prequeue, size, gamefiles, hwqueue,backgroundqueue,tempqueue,warmupqueue))
