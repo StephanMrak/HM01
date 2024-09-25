@@ -52,7 +52,7 @@ def listchecker(ele,list):
             return False
     return True
 
-def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,backgroundqueue,tempqueue,warmupqueue):
+def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,backgroundqueue,tempqueue,warmupqueue, activequeue):
     import time
     import io
     import os
@@ -130,6 +130,11 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
 
             if not tempqueue.empty():
                 self.templbl.set_text(str(tempqueue.get()))
+
+            if not activequeue.empty():
+                if activequeue.get()==True:
+                    activequeue.put(False)
+                    container3.set_enabled(True)
 
 
             if hmsysteme.game_isactive():
@@ -230,6 +235,7 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             for i in range (len(gamefiles)):
                 bt[i].onclick.do(functions[i])
 
+
             b1.onclick.do(self.on_button_pressed1)
             b2.onclick.do(self.on_button_pressed2)
             b3.onclick.do(self.on_button_pressed3)
@@ -294,6 +300,7 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
 
             tb.append(container,'Home')
             tb.append(container2,'Players')
+            container3.set_enabled(False)
             tb.append(container3, 'Games')
             tb.append(container4, 'Settings')
             

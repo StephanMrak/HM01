@@ -33,8 +33,10 @@ def main():
 
 
 	pygame.init()
-	#screen=pygame.display.set_mode(size, pygame.NOFRAME)
-	screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+	if hmsysteme.check_ifdebug():
+		screen = pygame.display.set_mode(size)
+	else:
+		screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 	pygame.display.set_caption("my game")
 	pygame.mouse.set_visible(False)
 	clock = pygame.time.Clock()
@@ -230,7 +232,11 @@ def main():
 			pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
 			hmsysteme.take_screenshot(screen)
 
-		for event in pygame.event.get():            
+		for event in pygame.event.get():
+			# Beenden bei [ESC] oder [X]
+			if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+				pygame.display.quit()
+				pygame.quit()
 			if event.type == pygame.MOUSEBUTTONDOWN:
 				pos = event.pos
 				for i in range(0, len(shooting_objects)):

@@ -1,4 +1,4 @@
-def background(threadhandler, backgroundqueue, warmupqueue):
+def background(threadhandler, backgroundqueue, warmupqueue, activequeue):
     import pygame
     import time
     import os
@@ -29,6 +29,7 @@ def background(threadhandler, backgroundqueue, warmupqueue):
 
 
 
+
         if a == "open":
             print("background opened")
             pygame.init()
@@ -42,9 +43,7 @@ def background(threadhandler, backgroundqueue, warmupqueue):
             a = "init"
 
         if running==True:
-            
             screen.fill(WHITE)
-
                 
             for event in pygame.event.get():
                 # Beenden bei [ESC] oder [X]
@@ -58,14 +57,18 @@ def background(threadhandler, backgroundqueue, warmupqueue):
             
             #print("0")
             if not warmupqueue.empty():
-                
                 warmuptime=warmupqueue.get()
+
             if warmuptime>0:
+                os.environ["hm_LEDsWarmupComplete"] = "0"
                 GAME_FONT = pygame.font.SysFont("Times", 50)
                 #print(warmuptime)
                 text = GAME_FONT.render("LEDs auf Betriebtsemperatur bringen: "+str(warmuptime), True, (255, 0, 0))
                 screen.blit(text, (150, 150))
                 del GAME_FONT
+            else:
+                activequeue.put(True)
+
             
             pygame.mouse.set_visible(False)
             pygame.display.flip()

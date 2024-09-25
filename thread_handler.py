@@ -14,7 +14,7 @@ def main():
     import arduino_reset
     import psutil
     import logging
-
+    os.environ["hm_pos"]="0"
     path=os.path.realpath(__file__)
     path=path.replace('thread_handler.py', '')
     #log_file=os.path.isfile(os.path.join(path, "logfilename.log"))
@@ -110,27 +110,30 @@ def main():
     queuegamename = []
     prequeue = multiprocessing.Queue()
     warmupqueue = multiprocessing.Queue()
+    activequeue = multiprocessing.Queue()
 
+    if hmsysteme.check_ifdebug():
+        pass#don't start these processes
+    else:
+        ths=multiprocessing.Process(target=hotspot.hotspot, args=("Mobile Hotspot",))
+        ths.start()
+        print("mobile hotspot process started")
 
-    ths=multiprocessing.Process(target=hotspot.hotspot, args=("Mobile Hotspot",))
-    ths.start()
-    print("mobile hotspot process started")
+        t1 = multiprocessing.Process(target=led_calibration_temp.led_calibration_temp, args=("led_calibration_temp",tempqueue))
+        t1.start()
+        print("led calibration process started")
     
-    #t1 = multiprocessing.Process(target=led_calibration_temp.led_calibration_temp, args=("led_calibration_temp",tempqueue))
-    #t1.start()
-    #print("led calibration process started")
-    
-    #time.sleep(1)
+
     t2 = multiprocessing.Process(target=hardware_com.hardware_com, args=("Hardware_com", path, queue, queue4,prequeue,warmupqueue, size))
     t2.start()
     print("hardware_com process started")
 
-    #t3 = multiprocessing.Process(target=background.background, args=("background",backgroundqueue,warmupqueue))
-    #t3.start()
-    #print("background process started")
-
+    t3 = multiprocessing.Process(target=background.background, args=("background",backgroundqueue,warmupqueue,activequeue))
+    t3.start()
+    print("background process started")
+    child_env = os.environ.copy()
     time.sleep(1)
-    t4 = multiprocessing.Process(target=mobile_com.mobile_com, args=("Mobile_com", path, queuegamename, queue, queue2, queue3, queue4, queue5, prequeue, size, gamefiles, hwqueue,backgroundqueue,tempqueue,warmupqueue))
+    t4 = multiprocessing.Process(target=mobile_com.mobile_com, args=("Mobile_com", path, queuegamename, queue, queue2, queue3, queue4, queue5, prequeue, size, gamefiles, hwqueue,backgroundqueue,tempqueue,warmupqueue, activequeue))
     t4.start()
     print("mobile_com process started")
 
@@ -145,8 +148,6 @@ def main():
             t1 = multiprocessing.Process(target=hardware_com.hardware_com, args=("Hardware_com", path, queue, queue4, size))
             time.sleep(0.5)
             t1.start()
-		
-    
 
 if __name__ == '__main__':
     main()
