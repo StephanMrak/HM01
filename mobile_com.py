@@ -69,6 +69,10 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
 
 
     playernames=[]
+    if hmsysteme.get_playerstatus() != False:
+        playernames = hmsysteme.get_playerstatus()
+
+
 
     container_players_added = gui.VBox(width=width, height=height,
                                        style={'padding-left': '-200px', 'font-size': '15px', 'align': 'left'})
@@ -86,6 +90,81 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
     container4 = gui.VBox(width=width, height=height,
                           style={'padding-left': '0px', 'font-size': '15px', 'align': 'left'})
     container4.style["background"] = "#404040"
+
+    def fill_grid_with_playernames():
+
+        def on_text_area_change(self, widget):
+            if hmsysteme.get_playerstatus() != False:
+                playernames = hmsysteme.get_playerstatus()
+            if txt.get_text() != "":
+                if listchecker(txt.get_text(),playernames)==True:
+                    playernames.append([txt.get_text(),True])
+                    txt.set_text("")
+                    hmsysteme.put_playernames(playernames)
+                    print(playernames)
+                    fill_grid_with_playernames()
+
+        if hmsysteme.get_playerstatus() != False:
+            playernames = hmsysteme.get_playerstatus()
+        lbl = gui.Label('input player name: ', width='50%', height='35px',
+                              style={'font-size': '25px', 'text-align': 'left'})
+        lbl.style["color"] = "white"
+
+        txt = gui.TextInput(width='30%', height='35px', style={'font-size': '25px', 'text-align': 'left'})
+        txt.style["background"] = "#606060"
+        txt.style["color"] = "white"
+        txt.onchange.do(on_text_area_change)
+        container2.empty()
+        container2.append(lbl)
+        container2.append(txt)
+
+        grid = gui.GridBox(width=250, style={'font-size': '30px', 'text-align': 'left'})
+        grid.style["background"] = "#404040"
+        grid.style["color"] = "white"
+        asd = []
+        checka = []
+        deletea=[]
+        functionsc = []
+        deletefunctions=[]
+        for i in range(0, len(playernames)):
+            asd.append(['delete' + str(i + 1),'check' + str(i + 1), 'label' + str(i + 1)])
+        grid.define_grid(asd)
+        for i in range(0, len(playernames)):
+            checka.append(gui.CheckBox(playernames[i][1]))
+            button = gui.Button('DELETE', height='100%')
+            button.style["background"] = "red"
+            button.style["box-shadow"] = "none"
+            deletea.append(button)
+
+            def f(widget, newValue, i=i):
+                if newValue == True:
+                    playernames[i][1] = True
+                else:
+                    playernames[i][1] = False
+                hmsysteme.put_playernames(playernames)
+
+
+            def deletefunction(widget,i=i):
+                playernames.pop(i)
+                hmsysteme.put_playernames(playernames)
+                fill_grid_with_playernames()
+
+
+
+
+            functionsc.append(f)
+            deletefunctions.append(deletefunction)
+            checka[i].onchange.do(functionsc[i])
+            deletea[i].onclick.do(deletefunctions[i])
+
+
+            lbl = gui.Label(playernames[i][0], width='30%', height='8%', margin='0px',
+                            style={'font-size': '30px', 'align': 'left'})
+            grid.append({'delete' + str(i + 1): deletea[i],'label' + str(i + 1): lbl, 'check' + str(i + 1): checka[i]})
+        container2.append(grid)
+
+
+
 
 
     class PILImageViewverWidget(gui.Image):
@@ -135,7 +214,6 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
                 if activequeue.get()==True:
                     activequeue.put(False)
                     container3.set_enabled(True)
-
 
             if hmsysteme.game_isactive():
                 a = hmsysteme.get_button_names()
@@ -271,22 +349,10 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             container4.append(b8)
 
 
-            # self.b_clear_names = gui.Button('clear player names',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
-            # self.b_clear_names.style["background"] = "#606060"
-            # self.b_clear_names.style["box-shadow"] = "none"
-            # self.b_clear_names .onclick.do(self.on_button_clear_names)
-            #
-            # container2.append(self.b_clear_names)
 
-            self.lbl2 = gui.Label('input player name: ', width='50%', height='35px',style={'font-size': '25px', 'text-align': 'left'})
-            self.lbl2.style["color"]="white"
-            container2.append(self.lbl2)
+            #fill container2 with player commands and active players
+            fill_grid_with_playernames()
 
-            self.txt=gui.TextInput( width='30%', height='35px',style={'font-size': '25px', 'text-align': 'left'})
-            self.txt.style["background"]="#606060"
-            self.txt.style["color"] = "white"
-            self.txt.onchange.do(self.on_text_area_change)
-            container2.append(self.txt)
 
             #create label for temp
             self.templbl= gui.Label('temp ', width='50%', height='35px',style={'font-size': '25px', 'text-align': 'left'})
@@ -379,47 +445,9 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
 
 
 
-        def on_text_area_change(self, widget, newValue):
-            if self.txt.get_text() != "":
-                if listchecker(self.txt.get_text(),playernames)==True:
-
-                    print(self.txt.get_text())
-                    container_players_added.empty()
-                    container2.empty()
-                    container2.append(self.lbl2)
-                    container2.append(self.txt)
-
-                    playernames.append([self.txt.get_text(),True])
-                    grid = gui.GridBox(width=50,style={'font-size': '30px', 'text-align': 'left'})
-                    grid.style["background"] = "#404040"
-                    grid.style["color"] = "white"
-                    asd=[]
-                    self.checka=[]
-                    self.functionsc=[]
-                    for i in range(0, len(playernames)):
-                        asd.append((['value'+str(i+1), 'label'+str(i+1)]))
-                    grid.define_grid(asd)
-                    for i in range(0, len(playernames)):
-                        self.checka.append(gui.CheckBox(playernames[i][1]))
-                        def f (widget,newValue, i=i):
-                            if newValue==True:
-                                playernames[i][1]=True
-                            else:
-                                playernames[i][1]=False
-                            hmsysteme.put_playernames(playernames)
-
-                        self.functionsc.append(f)
-                        self.checka[i].onchange.do(self.functionsc[i])
-
-                        lbl=gui.Label(playernames[i][0],width='30%', height='8%',margin='0px',style={'font-size': '30px', 'align': 'left'})
-                        grid.append({'label'+str(i+1): lbl, 'value'+str(i+1): self.checka[i]})
-                    container2.append(grid)
-                    #container_players_added.append(grid)
 
 
-                    self.txt.set_text("")
-                    hmsysteme.put_playernames(playernames)
-                    print(playernames)
+
 
     # starts the web server
     start(MyApp,start_browser=False)

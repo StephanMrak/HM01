@@ -67,7 +67,7 @@ def main():
     print("")
 
 
-    hmsysteme.clear_all()
+    #hmsysteme.clear_all()
 
     arduino_reset.arduino_reset()
 
@@ -112,6 +112,8 @@ def main():
     warmupqueue = multiprocessing.Queue()
     activequeue = multiprocessing.Queue()
 
+    hmsysteme.create_shared_memory()
+
     if hmsysteme.check_ifdebug():
         pass#don't start these processes
     else:
@@ -137,12 +139,10 @@ def main():
     t4.start()
     print("mobile_com process started")
 
-
-
-
-
     while True:
         time.sleep(0.5)
+
+
         if str(hwqueue.get())=="off":
             t1.terminate()
             t1 = multiprocessing.Process(target=hardware_com.hardware_com, args=("Hardware_com", path, queue, queue4, size))

@@ -528,7 +528,6 @@ def main():
         #print(wall_life)
 
 
-
         #Nackground Animations
         drawBackgroundAnimations(iAnimation)
 
