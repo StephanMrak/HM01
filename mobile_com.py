@@ -34,6 +34,7 @@ def close_game(asd, abt, backgroundqueue):
     for i in range(0,len(asd)):
         if asd[i].is_alive():           
             hmsysteme.close_game()
+            hmsysteme.put_button_names(False)
             time.sleep(0.5)
             asd[i].terminate()
             print(asd[i])
@@ -68,9 +69,6 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
     path=hmsysteme.get_path()
 
 
-    playernames=[]
-    if hmsysteme.get_playerstatus() != False:
-        playernames = hmsysteme.get_playerstatus()
 
 
 
@@ -92,33 +90,39 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
     container4.style["background"] = "#404040"
 
     def fill_grid_with_playernames():
-
         def on_text_area_change(self, widget):
-            if hmsysteme.get_playerstatus() != False:
-                playernames = hmsysteme.get_playerstatus()
-            if txt.get_text() != "":
+
+            playernames = hmsysteme.get_playerstatus()
+            if playernames == False:
+                playernames = []
+            if txt.get_text() != "" and len(txt.get_text())<20:
                 if listchecker(txt.get_text(),playernames)==True:
+
                     playernames.append([txt.get_text(),True])
                     txt.set_text("")
                     hmsysteme.put_playernames(playernames)
-                    print(playernames)
                     fill_grid_with_playernames()
 
         if hmsysteme.get_playerstatus() != False:
             playernames = hmsysteme.get_playerstatus()
+        else:
+            playernames=[]
         lbl = gui.Label('input player name: ', width='50%', height='35px',
                               style={'font-size': '25px', 'text-align': 'left'})
         lbl.style["color"] = "white"
 
-        txt = gui.TextInput(width='30%', height='35px', style={'font-size': '25px', 'text-align': 'left'})
+        txt = gui.TextInput(width='30%', height='35px', style={'font-size': '30px', 'text-align': 'left'})
         txt.style["background"] = "#606060"
         txt.style["color"] = "white"
         txt.onchange.do(on_text_area_change)
         container2.empty()
         container2.append(lbl)
         container2.append(txt)
+        txtblank=gui.Label('', width='50%', height='35px',
+                              style={'font-size': '25px', 'text-align': 'left'})
+        container2.append(txtblank)
 
-        grid = gui.GridBox(width=250, style={'font-size': '30px', 'text-align': 'left'})
+        grid = gui.GridBox(width=500)
         grid.style["background"] = "#404040"
         grid.style["color"] = "white"
         asd = []
@@ -130,8 +134,8 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             asd.append(['delete' + str(i + 1),'check' + str(i + 1), 'label' + str(i + 1)])
         grid.define_grid(asd)
         for i in range(0, len(playernames)):
-            checka.append(gui.CheckBox(playernames[i][1]))
-            button = gui.Button('DELETE', height='100%')
+            checka.append(gui.CheckBox(playernames[i][1],width='50px', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'}))
+            button=gui.Button('DELETE',width='130px', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
             button.style["background"] = "red"
             button.style["box-shadow"] = "none"
             deletea.append(button)
@@ -158,9 +162,10 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             deletea[i].onclick.do(deletefunctions[i])
 
 
-            lbl = gui.Label(playernames[i][0], width='30%', height='8%', margin='0px',
-                            style={'font-size': '30px', 'align': 'left'})
+            lbl = gui.Label(playernames[i][0], width='300px', height='50px' ,margin='1%',style={'font-size': '30px', 'text-align': 'left'})
             grid.append({'delete' + str(i + 1): deletea[i],'label' + str(i + 1): lbl, 'check' + str(i + 1): checka[i]})
+            grid.set_row_gap(20)
+            grid.set_column_gap(20)
         container2.append(grid)
 
 
@@ -228,6 +233,7 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
                                 abt[i].set_enabled(False)
                     except:
                         pass
+
 
 
             
