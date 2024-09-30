@@ -6,6 +6,7 @@ def main():
     import hardware_com
     import mobile_com
     import hotspot
+    import startscreen
     import background
     import rgb_background
     import hmsysteme
@@ -41,26 +42,26 @@ def main():
             
     #led_calib(200)
 
-    def is_raspberrypi():
-        try:
-            import RPi.GPIO as gpio
-            return True
-        except (ImportError, RuntimeError):
-            return False
-    def is_connected_to_lan():
-        addresses = psutil.net_if_addrs()
-        stats = psutil.net_if_stats()
-        available_networks = []
-        for intface, addr_list in addresses.items():
-            if any(getattr(addr, 'address').startswith("169.254") for addr in addr_list):
-                continue
-            elif intface in stats and getattr(stats[intface], "isup"):
-                available_networks.append(intface)
-            if intface.find("eth0") != -1:
-                if getattr(stats[intface], "speed") == 65535:
-                    print("Starting Interface")                    
-                else:
-                    return
+    # def is_raspberrypi():
+    #     try:
+    #         import RPi.GPIO as gpio
+    #         return True
+    #     except (ImportError, RuntimeError):
+    #         return False
+    # def is_connected_to_lan():
+    #     addresses = psutil.net_if_addrs()
+    #     stats = psutil.net_if_stats()
+    #     available_networks = []
+    #     for intface, addr_list in addresses.items():
+    #         if any(getattr(addr, 'address').startswith("169.254") for addr in addr_list):
+    #             continue
+    #         elif intface in stats and getattr(stats[intface], "isup"):
+    #             available_networks.append(intface)
+    #         if intface.find("eth0") != -1:
+    #             if getattr(stats[intface], "speed") == 65535:
+    #                 print("Starting Interface")
+    #             else:
+    #                 return
                     
 
 
@@ -85,10 +86,11 @@ def main():
     gamefiles=os.listdir(os.path.join(path, "games"))
     try:
         gamefiles.remove('__pycache__')
-        gamefiles.remove('game_template.py')
-        gamefiles.remove('pics')
     except:
         pass
+    gamefiles.remove('game_template.py')
+    gamefiles.remove('pics')
+
 
     for x in range(len(gamefiles)):
         gamefiles[x]=gamefiles[x].replace('.py', '')
@@ -129,7 +131,7 @@ def main():
     smd["Buttons"] = False
 
     if hmsysteme.check_ifdebug():
-        pass#don't start these processes
+        pass#start these processes only if running on HM01 Hardware
     else:
         ths=multiprocessing.Process(target=hotspot.hotspot, args=("Mobile Hotspot",))
         ths.start()
@@ -144,7 +146,7 @@ def main():
     t2.start()
     print("hardware_com process started")
 
-    t3 = multiprocessing.Process(target=background.background, args=("background",backgroundqueue,warmupqueue,activequeue))
+    t3 = multiprocessing.Process(target=startscreen.startscreen, args=("startscreen",warmupqueue,activequeue))
     t3.start()
     print("background process started")
 

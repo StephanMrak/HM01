@@ -63,7 +63,7 @@ def background(threadhandler, backgroundqueue, warmupqueue, activequeue):
                 os.environ["hm_LEDsWarmupComplete"] = "0"
                 GAME_FONT = pygame.font.SysFont("Times", 50)
                 #print(warmuptime)
-                text = GAME_FONT.render("LEDs auf Betriebtsemperatur bringen: "+str(warmuptime), True, (255, 0, 0))
+                text = GAME_FONT.render("LEDs auf Betriebstemperatur bringen: "+str(warmuptime), True, (255, 0, 0))
                 screen.blit(text, (150, 150))
                 del GAME_FONT
             else:
