@@ -40,13 +40,6 @@ def main():
     # Pygame init
     pygame.init()
 
-    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    size = hmsysteme.get_size()
-    #size = hmsysteme.get_size()
-    #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-    #names = hmsysteme.get_playernames()
-    names = ["Günther", "Herbert", "Dieter"]
 
     path = os.path.realpath(__file__)
     print(path)
@@ -56,8 +49,7 @@ def main():
     else:
         path = path.replace('TowerDefense.py', '')
 
-
-    #path = r"C:/Users/flori/Dropbox/Telespiel/Raspi_Programme/HM01_v0.1/"
+    size = hmsysteme.get_size()
     if hmsysteme.check_ifdebug():
         screen = pygame.display.set_mode(size)
     else:
