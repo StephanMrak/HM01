@@ -1,5 +1,4 @@
 def main():
-
     import time
     import multiprocessing
     import sys
@@ -12,9 +11,10 @@ def main():
     import hmsysteme
     import led_calibration_temp
     import arduino_reset
-    import psutil
+    from shared_memory_dict import SharedMemoryDict
+    #import psutil
     import logging
-    os.environ["hm_pos"]="0"
+
     path=os.path.realpath(__file__)
     path=path.replace('thread_handler.py', '')
     #log_file=os.path.isfile(os.path.join(path, "logfilename.log"))
@@ -83,9 +83,12 @@ def main():
                 list_files(os.path.join(path, filename))
 
     gamefiles=os.listdir(os.path.join(path, "games"))
-    gamefiles.remove('__pycache__')
-    gamefiles.remove('game_template.py')
-    gamefiles.remove('pics')
+    try:
+        gamefiles.remove('__pycache__')
+        gamefiles.remove('game_template.py')
+        gamefiles.remove('pics')
+    except:
+        pass
 
     for x in range(len(gamefiles)):
         gamefiles[x]=gamefiles[x].replace('.py', '')
@@ -112,7 +115,18 @@ def main():
     warmupqueue = multiprocessing.Queue()
     activequeue = multiprocessing.Queue()
 
+    #create shared memory to share data between processes
     hmsysteme.create_shared_memory()
+    smd = SharedMemoryDict(name='data', size=1024)
+    smd["Active"] = False
+    smd["Hit"] = False
+    smd["Pos"] = False
+    smd["Players"] = False
+    smd["Screen"] = False
+    smd["RGB"] = False
+    smd["Temp"] = False
+    smd["Action"] = False
+    smd["Buttons"] = False
 
     if hmsysteme.check_ifdebug():
         pass#don't start these processes
@@ -133,7 +147,7 @@ def main():
     t3 = multiprocessing.Process(target=background.background, args=("background",backgroundqueue,warmupqueue,activequeue))
     t3.start()
     print("background process started")
-    child_env = os.environ.copy()
+
     time.sleep(1)
     t4 = multiprocessing.Process(target=mobile_com.mobile_com, args=("Mobile_com", path, queuegamename, queue, queue2, queue3, queue4, queue5, prequeue, size, gamefiles, hwqueue,backgroundqueue,tempqueue,warmupqueue, activequeue))
     t4.start()
