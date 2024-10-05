@@ -33,11 +33,12 @@ def background(threadhandler, backgroundqueue, warmupqueue, activequeue):
         if a == "open":
             print("background opened")
             pygame.init()
-            
-            #Window Modus
-            screen = pygame.display.set_mode(size)
-            #Fullscreen
-            #screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+
+            if hmsysteme.check_ifdebug():
+                screen = pygame.display.set_mode(size)
+            else:
+                screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+
             
             running=True
             a = "init"

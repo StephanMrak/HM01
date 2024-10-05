@@ -146,7 +146,8 @@ def main():
     t2.start()
     print("hardware_com process started")
 
-    t3 = multiprocessing.Process(target=startscreen.startscreen, args=("startscreen",warmupqueue,activequeue))
+    #t3 = multiprocessing.Process(target=startscreen.startscreen, args=("startscreen",warmupqueue,activequeue))
+    t3 = multiprocessing.Process(target=background.background, args=("startscreen",backgroundqueue, warmupqueue, activequeue))
     t3.start()
     print("background process started")
 
