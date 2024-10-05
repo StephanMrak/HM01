@@ -67,20 +67,17 @@ def startscreen(processname,warmupqueue, activequeue):
 
 
 
-    def Cube(logo_texture):
+    def Cube(logo_data, logo_width, logo_height, logo_id):
 
 
-        logo_data = pygame.image.tostring(logo_texture, "RGBA", 1)
-        logo_width, logo_height = logo_texture.get_size()
-        logo_id = OpenGL.GL.glGenTextures(1)
+
         OpenGL.GL.glBindTexture(OpenGL.GL.GL_TEXTURE_2D, logo_id)
         OpenGL.GL.glTexParameteri(OpenGL.GL.GL_TEXTURE_2D, OpenGL.GL.GL_TEXTURE_MIN_FILTER,OpenGL.GL.GL_LINEAR)
         OpenGL.GL.glTexParameteri(OpenGL.GL.GL_TEXTURE_2D, OpenGL.GL.GL_TEXTURE_MAG_FILTER, OpenGL.GL.GL_LINEAR)
         OpenGL.GL.glTexImage2D(OpenGL.GL.GL_TEXTURE_2D, 0, OpenGL.GL.GL_RGBA, logo_width, logo_height, 0, OpenGL.GL.GL_RGBA, OpenGL.GL.GL_UNSIGNED_BYTE, logo_data)
-
         OpenGL.GL.glBegin(OpenGL.GL.GL_QUADS)
+
         for i_surface, surface in enumerate(surfaces):
-            x = 0
             OpenGL.GL.glNormal3fv(normals[i_surface])
 
             #for vertex, tex_coord in zip(surface,[(0, 0), (1, 0), (1, 1), (0, 1)]):
@@ -89,12 +86,7 @@ def startscreen(processname,warmupqueue, activequeue):
                 OpenGL.GL.glVertex3fv(verticies[vertex])
         OpenGL.GL.glEnd()
 
-        #glColor3fv(colors[0])
-       # glBegin(GL_LINES)
-       # for edge in edges:
-       #     for vertex in edge:
-       #         glVertex3fv(verticies[vertex])
-       # glEnd()
+
 
     def draw_text(text, x, y, color=(255, 255, 255), size=40):
         font = pygame.font.Font(None, size)
@@ -103,46 +95,7 @@ def startscreen(processname,warmupqueue, activequeue):
         OpenGL.GL.glRasterPos2f(x, y)
         OpenGL.GL.glDrawPixels(text_surface.get_width(), text_surface.get_height(), OpenGL.GL.GL_RGBA, OpenGL.GL.GL_UNSIGNED_BYTE, text_data)
 
-    def check_click(cube_pos, cube_size):
-        viewport = OpenGL.GL.glGetIntegerv(OpenGL.GL.GL_VIEWPORT)
-        modelview = OpenGL.GL.glGetDoublev(OpenGL.GL.GL_MODELVIEW_MATRIX)
-        projection = OpenGL.GL.glGetDoublev(OpenGL.GL.GL_PROJECTION_MATRIX)
 
-        # get the mouse position
-        mouse_pos = pygame.mouse.get_pos()
-
-        # convert the mouse position to normalized device coordinates
-        mouse_pos_ndc = [
-            2.0 * mouse_pos[0] / viewport[2] - 1.0,
-            1.0 - 2.0 * mouse_pos[1] / viewport[3],
-            0.0,
-        ]
-        #print(mouse_pos_ndc)
-        # convert the mouse position from NDC to world coordinates
-        viewport = OpenGL.GL.glGetIntegerv(OpenGL.GL.GL_VIEWPORT)
-        modelview = OpenGL.GL.glGetDoublev(OpenGL.GL.GL_MODELVIEW_MATRIX)
-        projection = OpenGL.GL.glGetDoublev(OpenGL.GL.GL_PROJECTION_MATRIX)
-
-        mouse_pos_world= OpenGL.GLU.gluUnProject(mouse_pos_ndc[0], mouse_pos_ndc[1], mouse_pos_ndc[2], modelview, projection, viewport)
-        print(mouse_pos_world)
-
-
-        # check if the mouse position is inside the cube
-        x, y, z = mouse_pos_world
-        cx, cy, cz = cube_pos
-        sx, sy, sz = cube_size
-        if (cx - sx/2) < x < (cx + sx/2) and \
-           (cy - sy/2) < y < (cy + sy/2) and \
-           (cz - sz/2) < z < (cz + sz/2):
-            print("Cube clicked!")
-            return True
-        else:
-            return False
-
-
-
-    cube_pos=(0,0,0)
-    cube_size=(10,10,10)
     logo_texture = pygame.image.load("logo_rotate.jpg")
     pygame.init()
 
@@ -170,15 +123,15 @@ def startscreen(processname,warmupqueue, activequeue):
     OpenGL.GL.glEnable(OpenGL.GL.GL_DEPTH_TEST)
     OpenGL.GL.glEnable(OpenGL.GL.GL_TEXTURE_2D)
     rotate=0
+    logo_data = pygame.image.tostring(logo_texture, "RGBA", 1)
+    logo_width, logo_height = logo_texture.get_size()
+    logo_id = OpenGL.GL.glGenTextures(1)
+
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 quit()
-
-        if pygame.mouse.get_pressed()[0]:
-            check_click(cube_pos, cube_size)
-
 
 
         OpenGL.GL.glClear(OpenGL.GL.GL_COLOR_BUFFER_BIT|OpenGL.GL.GL_DEPTH_BUFFER_BIT)
@@ -189,7 +142,7 @@ def startscreen(processname,warmupqueue, activequeue):
         OpenGL.GL.glColorMaterial(OpenGL.GL.GL_FRONT_AND_BACK, OpenGL.GL.GL_AMBIENT_AND_DIFFUSE )
         OpenGL.GL.glPushMatrix()
         OpenGL.GL.glRotatef(rotate, 1, 1, 1)
-        Cube(logo_texture)
+        Cube(logo_data, logo_width,logo_height,logo_id)
         OpenGL.GL.glPopMatrix()
         rotate+=0.5
         OpenGL.GL.glDisable(OpenGL.GL.GL_LIGHT0)
