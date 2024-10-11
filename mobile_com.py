@@ -199,9 +199,9 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
     
         
     
-    class MyApp(App):
+    class HMInterface(App):
         def __init__(self, *args):
-            super(MyApp, self).__init__(*args)
+            super(HMInterface, self).__init__(*args)
             
         def idle(self):
             time.sleep(0.1)
@@ -456,6 +456,6 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
 
 
     # starts the web server
-    start(MyApp,start_browser=False)
-    #start(MyApp, address='0.0.0.0', port=8081, multiple_instance=False, enable_file_cache=True, update_interval=0.1, start_browser=False)
+    start(HMInterface,start_browser=False)
+    #start(HMInterface, address='0.0.0.0', port=8081, multiple_instance=False, enable_file_cache=True, update_interval=0.1, start_browser=False)
     
