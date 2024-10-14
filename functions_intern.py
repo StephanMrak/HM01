@@ -22,7 +22,8 @@ def initialize_info(ns_info):
     ns_info.active = True
     ns_info.debug = True
     ns_info.size = (1360, 768)
-    ns_info.players = ["Alice", "Bob", "Carlos", "Dave"]
+    ns_info.all_players = {"Alic": True, "Bob": True, "Carlos": False, "Dave": True}
+    ns_info.players = ["Alice", "Bob", "Dave"]
     ns_info.hit = False
     ns_info.pos = []
     ns_info.rgb = [randint(0, 255), randint(0, 255), randint(0, 255)]
