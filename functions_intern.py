@@ -44,6 +44,6 @@ def get_path():
 
 def take_screenshot(screen):
     # TODO Ordner für interne dateien?
-    pygame.image.save(screen, path / "screencapture.jpg")
+    pygame.image.save(screen, path / "resources" / "screencapture.jpg")
     with open(path / "hmscreen", "wb") as myFile:
         pickle.dump(True, myFile)
