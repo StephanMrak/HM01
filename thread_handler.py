@@ -7,28 +7,15 @@ def main():
     import mobile_com
     import hotspot
     import startscreen
-    import background
-    import rgb_background
     import hmsysteme
     import led_calibration_temp
     import arduino_reset
     from shared_memory_dict import SharedMemoryDict
-    #import psutil
-    import logging
+
 
     path=os.path.realpath(__file__)
     path=path.replace('thread_handler.py', '')
-    #log_file=os.path.isfile(os.path.join(path, "logfilename.log"))
-    #logging.basicConfig(filename="logfile.txt",format='%(asctime)s %(levelname)-8s %(message)s',
-    #    level=logging.DEBUG,
-    #    datefmt='%Y-%m-%d %H:%M:%S')
 
-    #logger=logging.getLogger()
-    #logger.debug("Debug")
-    #print("Info")
-    #logger.warning("Warning")
-    #logger.error("Error")
-    #logger.critical("Critical")
 
     def led_calib(value):
         try:
@@ -39,36 +26,8 @@ def main():
             print("LEDS set to: " + str(value))
         except Exception as e:
             print(e)
-            
-    #led_calib(200)
-
-    # def is_raspberrypi():
-    #     try:
-    #         import RPi.GPIO as gpio
-    #         return True
-    #     except (ImportError, RuntimeError):
-    #         return False
-    # def is_connected_to_lan():
-    #     addresses = psutil.net_if_addrs()
-    #     stats = psutil.net_if_stats()
-    #     available_networks = []
-    #     for intface, addr_list in addresses.items():
-    #         if any(getattr(addr, 'address').startswith("169.254") for addr in addr_list):
-    #             continue
-    #         elif intface in stats and getattr(stats[intface], "isup"):
-    #             available_networks.append(intface)
-    #         if intface.find("eth0") != -1:
-    #             if getattr(stats[intface], "speed") == 65535:
-    #                 print("Starting Interface")
-    #             else:
-    #                 return
-                    
 
 
-    print("")
-
-
-    #hmsysteme.clear_all()
 
     arduino_reset.arduino_reset()
 
