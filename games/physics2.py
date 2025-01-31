@@ -136,7 +136,8 @@ def main():
 				self.destruct = True
 				last_hit[0] = 100
 				points[curr_player] += last_hit[0]
-				font = pygame.font.SysFont(pygame.font.get_fonts()[0], 28)
+				#font = pygame.font.SysFont(pygame.font.get_fonts()[0], 28)
+				font = pygame.font.Font(None, 28)
 				text = font.render(str("letzter Treffer : " + str(int(last_hit[0]))), True, BLUE)
 				screen.blit(text, (150 - text.get_width() // 2, 240 - text.get_height() // 2))
 				self.body.position = size[0]*2,size[1]*2
