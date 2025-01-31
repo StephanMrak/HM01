@@ -6,11 +6,27 @@ import random
 import math
 import hmsysteme
 
+
+def draw_text(text, x, y, color=(255, 255, 255), size=40):
+    font = pygame.font.Font(None, size)
+    text_surface = font.render(text, True, color, (0, 0, 0))
+    text_data = pygame.image.tostring(text_surface, "RGBA", True)
+    OpenGL.GL.glRasterPos2f(x, y)
+    OpenGL.GL.glDrawPixels(text_surface.get_width(), text_surface.get_height(), OpenGL.GL.GL_RGBA,
+                           OpenGL.GL.GL_UNSIGNED_BYTE, text_data)
+
 def main():
     RED =       (255,   0,   0)
     size = hmsysteme.get_size()
     # initialize Pygame
     pygame.init()
+    shotcounter=0
+    gameover=False
+    WHITE = (255, 255, 255)
+    BLACK = (0, 0, 0)
+    BLUE = (0, 191, 255)
+    RED = (255, 0, 0)
+    GREEN = (124, 252, 0)
     #screen=pygame.display.set_mode((0, 0), DOUBLEBUF | OPENGL, pygame.FULLSCREEN)
     screen=pygame.display.set_mode(size,DOUBLEBUF | OPENGL,pygame.NOFRAME)
 
@@ -58,10 +74,6 @@ def main():
             self.color=random.uniform(0,1), random.uniform(0,1), random.uniform(0,1)
             self.exist=True
 
-
-
-
-
         def draw(self):
 
             #glRotatef(self.rot_x, 1, 0, 0)
@@ -108,7 +120,7 @@ def main():
 
     # set the light properties
     ball_list=[]
-    num=5
+    num=2
     for i in range(-num,num):
         for j in range(-num,num):
             for z in range(-num, num):
@@ -123,8 +135,6 @@ def main():
         balls.remove(ball)
 
     while hmsysteme.game_isactive():
-
-
         # clear the screen and set the background color to black
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glClearColor(0.0, 0.0, 0.0, 1.0)
@@ -141,24 +151,31 @@ def main():
                 quit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
+                if not gameover:
+                    shotcounter += 1
                 for ball in ball_list:
                     coords=ball.print_pygame_coordinates()
                     dist=math.sqrt((coords[0]-pos[0])**2+(coords[1]-pos[1])**2)
                     #print(dist)
                     if dist<40:
-                        print("hit")
                         ball.change_color()
+
 
         if hmsysteme.hit_detected():
             pos = hmsysteme.get_pos()
+            if not gameover:
+                shotcounter += 1
             for ball in ball_list:
                 coords=ball.print_pygame_coordinates()
                 dist=math.sqrt((coords[0]-pos[0])**2+(coords[1]-pos[1])**2)
-                #print(dist)
                 if dist<40:
-                    print("hit")
                     ball.change_color()
 
+
+
+        if all(ball.exist==False for ball in ball_list):
+            gameover=True
+            draw_text("Anzahl Schüsse : " + str(shotcounter),-4.5, -1.5)
 
 
         # update the display
@@ -166,11 +183,10 @@ def main():
 
         # limit the frame rate
         clock.tick(60)
-        print(clock.get_fps())
+
 
     pygame.display.quit()
     pygame.quit()
 
 if __name__ == '__main__':
-
-	main()
+    main()
