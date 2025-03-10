@@ -4,7 +4,7 @@ def startscreen(processname,warmupqueue, activequeue):
     import hmsysteme
     import OpenGL.GL
     import OpenGL.GLU
-
+    warmuptime=10
     verticies = (
         ( 1, -1, -1), # 0
         ( 1,  1, -1), # 1
