@@ -3,7 +3,7 @@ def main():
     import multiprocessing
     import sys
     import os
-    import hardware_com
+    import hardware_com_micro
     import mobile_com
     import hotspot
     import startscreen
@@ -101,9 +101,9 @@ def main():
         print("led calibration process started")
     
 
-    t2 = multiprocessing.Process(target=hardware_com.hardware_com, args=("Hardware_com", path, queue, queue4,prequeue,warmupqueue, size))
+    t2 = multiprocessing.Process(target=hardware_com_micro.hardware_com_micro, args=("Hardware_com_micro", path, queue, queue4,prequeue,warmupqueue, size))
     t2.start()
-    print("hardware_com process started")
+    print("hardware_com_micro process started")
 
     t3 = multiprocessing.Process(target=startscreen.startscreen, args=("startscreen",warmupqueue,activequeue))
 
@@ -121,7 +121,7 @@ def main():
 
         if str(hwqueue.get())=="off":
             t1.terminate()
-            t1 = multiprocessing.Process(target=hardware_com.hardware_com, args=("Hardware_com", path, queue, queue4, size))
+            t1 = multiprocessing.Process(target=hardware_com_micro.hardware_com_micro, args=("Hardware_com", path, queue, queue4, size))
             time.sleep(0.5)
             t1.start()
 
