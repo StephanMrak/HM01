@@ -4,7 +4,7 @@ import time
 import pygame
 import os
 import hmsysteme
-from check_for_updates import CheckForUpdates
+from check_for_updates import CheckForUpdates, UpdateSystem
 
 try:
     import RPi.GPIO as GPIO
@@ -397,7 +397,17 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             self.dialog.show(self)
 
         def on_button_pressed6(self, widget):
-            CheckForUpdates()
+            if CheckForUpdates():
+                self.dialog = gui.GenericDialog(width=350, title='Update available',
+                                                message='Do you really want to update? The System will be restarted!')
+                self.dialog.confirm_dialog.do(self.up_func)
+                self.dialog.show(self)
+            else:
+                self.dialog = gui.GenericDialog(width=350, title='No Update available',
+                                                message='No update available')
+                self.dialog.confirm_dialog.do()
+                self.dialog.show(self)
+
 
 
 
@@ -423,6 +433,9 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             time.sleep(0.1)
             GPIO.output(4, 0)
             print("system reset")
+
+        def up_func(self,widget):
+            UpdateSystem()
 
 
 

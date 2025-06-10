@@ -7,6 +7,7 @@ from urllib.parse import unquote
 import re
 import os
 
+
 def get_download_url(release_info, asset_index=0):
     """Ermittelt Download-URL aus Release-Informationen"""
     # 1. Prüfe Assets
@@ -122,10 +123,10 @@ def download_file(url, filepath, token=None):
         raise SystemExit(f"❌ Download fehlgeschlagen: {e}")
 
 
+
 def CheckForUpdates():
 
     local_version=get_local_version()
-    local_version="0.2"
 
     try:
         latest_version = get_latest_release_info("StephanMrak", "HM01")
@@ -137,6 +138,27 @@ def CheckForUpdates():
             return
         if is_update_available(local_version, latest_version["tag_name"]):
             print(f"✅ Update verfügbar! Lokal: {local_version} | Neueste: {latest_version["tag_name"]}")
+            return True
+        else:
+            return False
+
+    except KeyboardInterrupt:
+        print("\n⛔ Skript abgebrochen")
+
+
+
+def UpdateSystem():
+    local_version=get_local_version()
+
+    try:
+        latest_version = get_latest_release_info("StephanMrak", "HM01")
+        # Download-URL ermitteln
+        try:
+            download_url = get_download_url(latest_version, 0)
+        except SystemExit as e:
+            print(e)
+            return
+        if is_update_available(local_version, latest_version["tag_name"]):
             home_directory = os.path.expanduser("~")
             if download_url.find("tarball")>0:
                 downloaded_file = download_file(download_url, home_directory+"/Downloads/HM01-source.tar.gz", None)
@@ -159,3 +181,4 @@ def CheckForUpdates():
 
 if __name__ == "__main__":
     CheckForUpdates()
+    UpdateSystem()
