@@ -4,6 +4,7 @@ import time
 import pygame
 import os
 import hmsysteme
+from check_for_updates import CheckForUpdates
 
 try:
     import RPi.GPIO as GPIO
@@ -277,18 +278,10 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             b5 = gui.Button('System reboot',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
             b5.style["background"] = "#606060"
             b5.style["box-shadow"] = "none"
-
-            b6 = gui.Button('20% Preset',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
+            b6 = gui.Button('Check for Updates',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
             b6.style["background"] = "#606060"
             b6.style["box-shadow"] = "none"
 
-            b7 = gui.Button('15% Preset',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
-            b7.style["background"] = "#606060"
-            b7.style["box-shadow"] = "none"
-
-            b8 = gui.Button('10% Preset',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
-            b8.style["background"] = "#606060"
-            b8.style["box-shadow"] = "none"
 
             #self.image_widget = PILImageViewverWidget(width=width, height=height)
             self.image_widget = PILImageViewverWidget(width=width)
@@ -326,8 +319,7 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             b4.onclick.do(self.on_button_pressed4)
             b5.onclick.do(self.on_button_pressed5)
             b6.onclick.do(self.on_button_pressed6)
-            b7.onclick.do(self.on_button_pressed7)
-            b8.onclick.do(self.on_button_pressed8)
+
 
             
 
@@ -351,8 +343,7 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             container4.append(b4)
             container4.append(b5)
             container4.append(b6)
-            container4.append(b7)
-            container4.append(b8)
+
 
 
 
@@ -406,25 +397,10 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             self.dialog.show(self)
 
         def on_button_pressed6(self, widget):
-            preq.put("20")
-            GPIO.output(4, 1)
-            time.sleep(0.1)
-            GPIO.output(4, 0)
-            print("20 Preset Loaded")
+            CheckForUpdates()
 
-        def on_button_pressed7(self, widget):
-            preq.put("15")
-            GPIO.output(4, 1)
-            time.sleep(0.1)
-            GPIO.output(4, 0)
-            print("15 Preset Loaded")
 
-        def on_button_pressed8(self, widget):
-            preq.put("10")
-            GPIO.output(4, 1)
-            time.sleep(0.1)
-            GPIO.output(4, 0)
-            print("10 Preset Loaded")
+
 
 
         # def on_button_clear_names(self, widget):
