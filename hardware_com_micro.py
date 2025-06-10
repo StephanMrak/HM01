@@ -522,7 +522,7 @@ def load_and_enqueue_data(npy_file, data_queue):
     print("Data from npy file loaded into queue.")
 
 def hardware_com_micro(threadname, path, q, q4, preq, warmupqueue, size):
-    wait_time=10
+    wait_time=1
     print("waiting for " +str(wait_time)+" seconds to warm up LEDs")
     while wait_time>0:
         warmupqueue.put(wait_time)

@@ -1,5 +1,7 @@
 import requests
 import argparse
+import tarfile
+import zipfile
 from packaging import version
 from urllib.parse import unquote
 import re
@@ -120,7 +122,7 @@ def download_file(url, filepath, token=None):
         raise SystemExit(f"❌ Download fehlgeschlagen: {e}")
 
 
-def main():
+def CheckForUpdates():
 
     local_version=get_local_version()
     local_version="0.2"
@@ -136,15 +138,24 @@ def main():
         if is_update_available(local_version, latest_version["tag_name"]):
             print(f"✅ Update verfügbar! Lokal: {local_version} | Neueste: {latest_version["tag_name"]}")
             home_directory = os.path.expanduser("~")
-            downloaded_file = download_file(download_url, home_directory+"/Downloads/abc.zip", None)
+            if download_url.find("tarball")>0:
+                downloaded_file = download_file(download_url, home_directory+"/Downloads/HM01-source.tar.gz", None)
+                tar = tarfile.open(downloaded_file)
+                tar.extractall(home_directory+"/Downloads/HM01-source")
+                tar.close()
+            else:
+                downloaded_file = download_file(download_url, home_directory + "/Downloads/HM01-source.zip", None)
+                with zipfile.ZipFile(downloaded_file, 'r') as zip_ref:
+                    zip_ref.extractall(home_directory+"/Downloads/HM01-source")
             print(f"💾 Datei gespeichert unter: {downloaded_file}")
         else:
             print(f"✔️ Kein Update verfügbar. Version {local_version} ist aktuell.")
             return
+
 
     except KeyboardInterrupt:
         print("\n⛔ Skript abgebrochen")
 
 
 if __name__ == "__main__":
-    main()
+    CheckForUpdates()
