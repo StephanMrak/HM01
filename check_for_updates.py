@@ -6,6 +6,8 @@ from packaging import version
 from urllib.parse import unquote
 import re
 import os
+import shutil
+import multiprocessing
 
 
 def get_download_url(release_info, asset_index=0):
@@ -99,28 +101,34 @@ def download_asset(asset_info, download_dir=".", token=None):
 
 def download_file(url, filepath, token=None):
     """Lädt eine Datei herunter mit Fortschrittsanzeige"""
-    try:
-        headers = {}
-        if token:
-            headers['Authorization'] = f'token {token}'
+    def download(url,filepath,token):
+        try:
+            headers = {}
+            if token:
+                headers['Authorization'] = f'token {token}'
 
-        print(f"⬇️ Lade herunter: {os.path.basename(filepath)}")
-        with requests.get(url, headers=headers, stream=True) as r:
-            r.raise_for_status()
-            total_size = int(r.headers.get('content-length', 0))
-            downloaded = 0
+            print(f"⬇️ Lade herunter: {os.path.basename(filepath)}")
+            with requests.get(url, headers=headers, stream=True) as r:
+                r.raise_for_status()
+                total_size = int(r.headers.get('content-length', 0))
+                downloaded = 0
 
-            with open(filepath, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    if total_size > 0:
-                        progress = min(100, int(100 * downloaded / total_size))
-                        print(f"\rFortschritt: {progress}%", end='')
-            print("\n✅ Download abgeschlossen!")
-        return filepath
-    except Exception as e:
-        raise SystemExit(f"❌ Download fehlgeschlagen: {e}")
+                with open(filepath, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            progress = min(100, int(100 * downloaded / total_size))
+                            print(f"\rFortschritt: {progress}%", end='')
+                print("\n✅ Download abgeschlossen!")
+        except Exception as e:
+            raise SystemExit(f"❌ Download fehlgeschlagen: {e}")
+    p1=multiprocessing.Process(target=download, args=(url, filepath,token))
+    p1.start()
+    p1.join()
+
+    return filepath
+
 
 
 
@@ -173,6 +181,16 @@ def UpdateSystem():
         else:
             print(f"✔️ Kein Update verfügbar. Version {local_version} ist aktuell.")
             return
+
+        #apply new version
+        HM_source=os.listdir(home_directory+"/Downloads/HM01-source")[0]
+        dest=home_directory+"/Downloads/HM01"
+        if os.path.exists(dest):
+            shutil.rmtree(dest)
+        shutil.copytree(home_directory+"/Downloads/HM01-source/"+HM_source,home_directory+"/Downloads/HM01")
+        print(f"Updated to new version")
+
+
 
 
     except KeyboardInterrupt:
