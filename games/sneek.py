@@ -144,7 +144,6 @@ def main():
         text = font.render(f"Points: {POINTS}", True, BLUE)
         screen.blit(text, (100 ,250))
         del font
-        a = hmsysteme.get_action()
         newsnake.movesnake()
         newsnake.draw()
         if random.randrange(0,10)==5:
