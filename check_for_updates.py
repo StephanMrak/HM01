@@ -8,6 +8,7 @@ import re
 import os
 import shutil
 import multiprocessing
+import subprocess
 
 
 def get_download_url(release_info, asset_index=0):
@@ -184,6 +185,10 @@ def UpdateSystem():
                 shutil.rmtree(dest)
             shutil.copytree(home_directory+"/Downloads/HM01-source/"+HM_source,home_directory+"/Downloads/HM01")
             print(f"Updated to new version")
+            subprocess.call("pip install hmsysteme", shell=True)
+            print(f"Also updated hmsysteme package to newest version")
+
+
 
         except KeyboardInterrupt:
             print("\n⛔ Skript abgebrochen")
