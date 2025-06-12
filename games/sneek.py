@@ -1,9 +1,6 @@
 def main():
     import pygame
     import random
-    import time
-    import math
-    import time
     import hmsysteme
     import os
     import platform
@@ -12,22 +9,21 @@ def main():
     BLUE = (0, 191, 255)
     RED = (255, 0, 0)
     GREEN = (124, 252, 0)
-    arrey = []
-    anzahl = 10
     last_hit = []
     last_hit.append(0)
     size = hmsysteme.get_size()
     print(size)
-    pos = ([0, 0])
     names = hmsysteme.get_playernames()
     hmsysteme.put_button_names(["reset"])
     WIDTH=50
+    POINTS=0
+    TIME=60
     if not names:
         names = "dummy"
     points = []
     for i in range(0, len(names)):
         points.append(0)
-    curr_player = 0
+    tick=2
 
 
     pygame.init()
@@ -59,6 +55,16 @@ def main():
 
         def getrect(self):
             return [(self.pos[0],self.pos[1]),(self.pos[0],self.pos[1]+self.width),(self.pos[0]+self.width,self.pos[1]+self.width),(self.pos[0]+self.width,self.pos[1])]
+
+        def checkifhit(self,hitcoords):
+            if hitcoords[0]>self.pos[0]and hitcoords[0]<(self.pos[0]+self.width):
+                if hitcoords[1] > self.pos[1] and hitcoords[1] < (self.pos[1] + self.width):
+                    return True
+                else:
+                    return False
+            else:
+                return False
+
 
 
     class snake():
@@ -122,18 +128,28 @@ def main():
     while hmsysteme.game_isactive():
         # print(os.environ["hm_GameIsActive"])
         screen.fill(BLACK)
-        # font = pygame.font.SysFont(pygame.font.get_fonts()[0], 28)
-        font = pygame.font.Font(None, 28)
-        pygame.draw.circle(screen, BLUE, [50, 300 + (40 * (curr_player + 1))], 10, 10)
-        for i in range(0, len(names)):
-            text = font.render(str(names[i] + " " + str(int(points[i]))), True, BLUE)
-            screen.blit(text, (200 - text.get_width() // 2, 300 + (40 * (i + 1)) - text.get_height() // 2))
+
+        a= hmsysteme.get_action()
+        if a==1:
+            TIME=60
+            POINTS=0
+            newsnake=snake()
+
+        font = pygame.font.Font(None, 35)
+        text = font.render(f"Time remaining: {round(TIME,1)}", True, BLUE)
+        screen.blit(text, (100 , 200 ))
+        TIME=TIME-(1/tick)
+        if TIME <=0:
+            TIME=0
+        text = font.render(f"Points: {POINTS}", True, BLUE)
+        screen.blit(text, (100 ,250))
         del font
         a = hmsysteme.get_action()
         newsnake.movesnake()
         newsnake.draw()
         if random.randrange(0,10)==5:
             newsnake.changedirection()
+
 
 
 
@@ -151,21 +167,36 @@ def main():
                 mausx = event.pos[0]  # pos = pygame.mouse.get_pos() MAUSPOSITION ingame
                 mausy = event.pos[1]
                 Diabolo_Rect = pygame.Rect(mausx - 9, mausy - 9, 18, 18)
-                newsnake.addblock()
+                screen.blit(Diabolo, Diabolo_Rect)
+                pygame.display.flip()
+                for block in newsnake.blocks:
+                    if block.checkifhit([mausx,mausy])==True:
+                        newsnake.addblock()
+                        POINTS+=1
+                        break
+
 
                 # pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
                 hmsysteme.take_screenshot(screen)
 
         if hmsysteme.hit_detected():
             pos = hmsysteme.get_pos()
-            pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
+            for block in newsnake.blocks:
+                if block.checkifhit([pos[0], pos[1]]) == True:
+                    newsnake.addblock()
+                    POINTS += 1
+                    break
+            Diabolo_Rect = pygame.Rect(int(pos[0]) - 9, int(pos[1]) - 9, 18, 18)
+            screen.blit(Diabolo, Diabolo_Rect)
+            pygame.display.flip()
+            #pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
             hmsysteme.take_screenshot(screen)
             newsnake.addblock()
 
         screen.blit(Diabolo, Diabolo_Rect)
         pygame.display.flip()
         # print(clock.get_fps())
-        clock.tick(2)
+        clock.tick(tick)
 
     pygame.display.quit()
     pygame.quit()
