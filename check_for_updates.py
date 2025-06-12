@@ -101,31 +101,26 @@ def download_asset(asset_info, download_dir=".", token=None):
 
 def download_file(url, filepath, token=None):
     """Lädt eine Datei herunter mit Fortschrittsanzeige"""
-    def download(url,filepath,token):
-        try:
-            headers = {}
-            if token:
-                headers['Authorization'] = f'token {token}'
+    try:
+        headers = {}
+        if token:
+            headers['Authorization'] = f'token {token}'
+        print(f"⬇️ Lade herunter: {os.path.basename(filepath)}")
+        with requests.get(url, headers=headers, stream=True) as r:
+            r.raise_for_status()
+            total_size = int(r.headers.get('content-length', 0))
+            downloaded = 0
 
-            print(f"⬇️ Lade herunter: {os.path.basename(filepath)}")
-            with requests.get(url, headers=headers, stream=True) as r:
-                r.raise_for_status()
-                total_size = int(r.headers.get('content-length', 0))
-                downloaded = 0
-
-                with open(filepath, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        if total_size > 0:
-                            progress = min(100, int(100 * downloaded / total_size))
-                            print(f"\rFortschritt: {progress}%", end='')
-                print("\n✅ Download abgeschlossen!")
-        except Exception as e:
-            raise SystemExit(f"❌ Download fehlgeschlagen: {e}")
-    p1=multiprocessing.Process(target=download, args=(url, filepath,token))
-    p1.start()
-    p1.join()
+            with open(filepath, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        progress = min(100, int(100 * downloaded / total_size))
+                        print(f"\rFortschritt: {progress}%", end='')
+            print("\n✅ Download abgeschlossen!")
+    except Exception as e:
+        raise SystemExit(f"❌ Download fehlgeschlagen: {e}")
 
     return filepath
 
@@ -156,45 +151,44 @@ def CheckForUpdates():
 
 
 def UpdateSystem():
-    local_version=get_local_version()
-
-    try:
-        latest_version = get_latest_release_info("StephanMrak", "HM01")
-        # Download-URL ermitteln
+    def UpdateandApply():
+        local_version=get_local_version()
         try:
-            download_url = get_download_url(latest_version, 0)
-        except SystemExit as e:
-            print(e)
-            return
-        if is_update_available(local_version, latest_version["tag_name"]):
-            home_directory = os.path.expanduser("~")
-            if download_url.find("tarball")>0:
-                downloaded_file = download_file(download_url, home_directory+"/Downloads/HM01-source.tar.gz", None)
-                tar = tarfile.open(downloaded_file)
-                tar.extractall(home_directory+"/Downloads/HM01-source")
-                tar.close()
+            latest_version = get_latest_release_info("StephanMrak", "HM01")
+            # Download-URL ermitteln
+            try:
+                download_url = get_download_url(latest_version, 0)
+            except SystemExit as e:
+                print(e)
+                return
+            if is_update_available(local_version, latest_version["tag_name"]):
+                home_directory = os.path.expanduser("~")
+                if download_url.find("tarball")>0:
+                    downloaded_file = download_file(download_url, home_directory+"/Downloads/HM01-source.tar.gz", None)
+                    tar = tarfile.open(downloaded_file)
+                    tar.extractall(home_directory+"/Downloads/HM01-source")
+                    tar.close()
+                else:
+                    downloaded_file = download_file(download_url, home_directory + "/Downloads/HM01-source.zip", None)
+                    with zipfile.ZipFile(downloaded_file, 'r') as zip_ref:
+                        zip_ref.extractall(home_directory+"/Downloads/HM01-source")
+                print(f"💾 Datei gespeichert unter: {downloaded_file}")
             else:
-                downloaded_file = download_file(download_url, home_directory + "/Downloads/HM01-source.zip", None)
-                with zipfile.ZipFile(downloaded_file, 'r') as zip_ref:
-                    zip_ref.extractall(home_directory+"/Downloads/HM01-source")
-            print(f"💾 Datei gespeichert unter: {downloaded_file}")
-        else:
-            print(f"✔️ Kein Update verfügbar. Version {local_version} ist aktuell.")
-            return
+                print(f"✔️ Kein Update verfügbar. Version {local_version} ist aktuell.")
+                return
 
-        #apply new version
-        HM_source=os.listdir(home_directory+"/Downloads/HM01-source")[0]
-        dest=home_directory+"/Downloads/HM01"
-        if os.path.exists(dest):
-            shutil.rmtree(dest)
-        shutil.copytree(home_directory+"/Downloads/HM01-source/"+HM_source,home_directory+"/Downloads/HM01")
-        print(f"Updated to new version")
+            #apply new version
+            HM_source=os.listdir(home_directory+"/Downloads/HM01-source")[0]
+            dest=home_directory+"/Downloads/HM01"
+            if os.path.exists(dest):
+                shutil.rmtree(dest)
+            shutil.copytree(home_directory+"/Downloads/HM01-source/"+HM_source,home_directory+"/Downloads/HM01")
+            print(f"Updated to new version")
 
-
-
-
-    except KeyboardInterrupt:
-        print("\n⛔ Skript abgebrochen")
+        except KeyboardInterrupt:
+            print("\n⛔ Skript abgebrochen")
+    p1=multiprocessing.Process(target=UpdateandApply)
+    p1.start()
 
 
 if __name__ == "__main__":
