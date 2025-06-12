@@ -530,6 +530,9 @@ def hardware_com_micro(threadname, path, q, q4, preq, warmupqueue, size):
         time.sleep(1)
     wait_time=0
     warmupqueue.put(wait_time)
+    if hmsysteme.check_ifdebug()==True:
+        return
+
     while True:
         parser = argparse.ArgumentParser(description="SPI Data Processing")
         parser.add_argument("-p", action="store_true", help="Enable plotting")
