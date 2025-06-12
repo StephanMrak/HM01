@@ -405,7 +405,6 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             else:
                 self.dialog = gui.GenericDialog(width=350, title='No Update available',
                                                 message='No update available')
-                self.dialog.confirm_dialog.do()
                 self.dialog.show(self)
 
 
