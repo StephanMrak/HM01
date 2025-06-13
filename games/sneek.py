@@ -14,7 +14,7 @@ def main():
     size = hmsysteme.get_size()
     print(size)
     names = hmsysteme.get_playernames()
-    hmsysteme.put_button_names(["reset"])
+    hmsysteme.put_button_names(["set time:60sek", "set time:120sek","set time:180sek","set time:300sek","set time:600sek"])
     WIDTH=50
     POINTS=0
     TIME=60
@@ -124,6 +124,7 @@ def main():
 
 
     newsnake=snake()
+    gameover=False
 
     while hmsysteme.game_isactive():
         # print(os.environ["hm_GameIsActive"])
@@ -134,13 +135,40 @@ def main():
             TIME=60
             POINTS=0
             newsnake=snake()
+            gameover = False
+        elif a==2:
+            TIME=120
+            POINTS=0
+            newsnake=snake()
+            gameover = False
+        elif a == 3:
+            TIME = 180
+            POINTS = 0
+            newsnake = snake()
+            gameover = False
+        elif a == 4:
+            TIME = 300
+            POINTS = 0
+            newsnake = snake()
+            gameover = False
+        elif a == 5:
+            TIME = 600
+            POINTS = 0
+            newsnake = snake()
+            gameover = False
+
 
         font = pygame.font.Font(None, 35)
         text = font.render(f"Time remaining: {round(TIME,1)}", True, BLUE)
         screen.blit(text, (100 , 200 ))
-        TIME=TIME-(1/tick)
+
         if TIME <=0:
             TIME=0
+            font2 = pygame.font.Font(None, 100)
+            gameovertext = font2.render("Game Over!", True, (255, 0, 0))
+            screen.blit(gameovertext, (500, 250))
+            gameover=True
+        TIME = TIME - (1 / tick)
         text = font.render(f"Points: {POINTS}", True, BLUE)
         screen.blit(text, (100 ,250))
         del font
@@ -159,7 +187,7 @@ def main():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 pygame.display.quit()
                 pygame.quit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN and not gameover:
                 pos = event.pos
 
                     # hmsysteme.put_rgbcolor(arrey[i].color)
@@ -180,17 +208,18 @@ def main():
 
         if hmsysteme.hit_detected():
             pos = hmsysteme.get_pos()
-            for block in newsnake.blocks:
-                if block.checkifhit([pos[0], pos[1]]) == True:
-                    newsnake.addblock()
-                    POINTS += 1
-                    break
-            Diabolo_Rect = pygame.Rect(int(pos[0]) - 9, int(pos[1]) - 9, 18, 18)
-            screen.blit(Diabolo, Diabolo_Rect)
-            pygame.display.flip()
-            #pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
-            hmsysteme.take_screenshot(screen)
-            newsnake.addblock()
+            if not gameover:
+                for block in newsnake.blocks:
+                    if block.checkifhit([pos[0], pos[1]]) == True:
+                        newsnake.addblock()
+                        POINTS += 1
+                        break
+                Diabolo_Rect = pygame.Rect(int(pos[0]) - 9, int(pos[1]) - 9, 18, 18)
+                screen.blit(Diabolo, Diabolo_Rect)
+                pygame.display.flip()
+                #pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
+                hmsysteme.take_screenshot(screen)
+                newsnake.addblock()
 
         screen.blit(Diabolo, Diabolo_Rect)
         pygame.display.flip()
