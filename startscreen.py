@@ -168,6 +168,7 @@ def startscreen(processname, warmupqueue, activequeue):
         if not warmupqueue.empty():
             warmuptime = warmupqueue.get()
 
+        warmuptime = -1  # TODO wieder ändern
         if warmuptime > 0:
             draw_text(
                 "LEDs auf Betriebstemperatur bringen: " + str(warmuptime), -4.5, 2, (255, 0, 0), 60

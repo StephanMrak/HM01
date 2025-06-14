@@ -9,12 +9,6 @@ from datetime import datetime
 
 class MyApp(App):
     def __init__(self, *args):
-        # self.E1 = E1
-        # self.Q1 = Q1
-        # print(self.E1)
-        # print(self.Q1)
-        # self.E1 = args.pop("E1")
-        # self.Q1 = args.pop("Q1")
         super(MyApp, self).__init__(*args)
 
     def main(self, e_warmup, e_stop, q_hit, shared_ns):
@@ -23,7 +17,7 @@ class MyApp(App):
         self.q_hit = q_hit
         self.shared_ns = shared_ns
 
-        self.size = (1360, 768)
+        self.size = shared_ns.size  # (1360, 768). Defined during initialization in multitest.py
         container = gui.VBox(width=120, height=100)
         self.lbl = gui.Label("Hello world!")
 
@@ -103,17 +97,3 @@ def Counter(e_warmup, e_stop, q_hit, shared_ns):
 def Warmup(e_warmup):
     time.sleep(10)
     e_warmup.set()
-
-
-if __name__ == "__main__":
-
-    with multiprocessing.Manager() as manager:
-        event_warmup = manager.Event()
-        event_stop = manager.Event()
-        queue_hit = manager.Queue(maxsize=1)
-
-        namespace = manager.Namespace()
-        namespace.name = "asdf"
-        namespace.ii = 0
-
-        myServer(e_warmup=event_warmup, e_stop=event_stop, q_hit=queue_hit, shared_ns=namespace)

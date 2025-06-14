@@ -1,6 +1,6 @@
 import multiprocessing.process
 import multiprocessing
-import multitest_functions
+import multiexample_functions
 
 
 if __name__ == "__main__":
@@ -16,14 +16,14 @@ if __name__ == "__main__":
 
         t0 = multiprocessing.Process(
             name="Warmup",
-            target=multitest_functions.Warmup,
+            target=multiexample_functions.Warmup,
             args=(event_warmup,),
         )
         t0.start()
 
         t1 = multiprocessing.Process(
             name="Server",
-            target=multitest_functions.myServer,
+            target=multiexample_functions.myServer,
             args=(
                 event_warmup,
                 event_stop,
@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
         t2 = multiprocessing.Process(
             name="Counter",
-            target=multitest_functions.Counter,
+            target=multiexample_functions.Counter,
             args=(
                 event_warmup,
                 event_stop,
