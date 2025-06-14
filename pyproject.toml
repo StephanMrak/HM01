@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "hm01"
+version = "0.1.0"
+description = "HM01 is an easy to use digital shooting range for air powered guns to use at home."
+authors = ["Stephan", "Alex"]
+license = "TODO"
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+remi = "^2022.7.27"
+pygame = "^2.6.1"
+pymunk = "^6.9.0"
+PyOpenGL = "^3.1.7"
+pyserial = "^3.5"
+smbus2 = "^0.5.0"
+setuptools = "^75.2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
