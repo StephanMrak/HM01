@@ -22,13 +22,8 @@ def main():
     names = hmsysteme.get_playernames()
     hmsysteme.put_button_names(["set time:60sek", "set time:120sek","set time:180sek","set time:300sek","set time:600sek", "add snake", "remove snake"])
     WIDTH=50
-    POINTS=0
+    SCORE=0
     TIME=60
-    if not names:
-        names = "dummy"
-    points = []
-    for i in range(0, len(names)):
-        points.append(0)
     tick=2
 
 
@@ -138,31 +133,31 @@ def main():
         a= hmsysteme.get_action()
         if a==1:
             TIME=60
-            POINTS=0
+            SCORE=0
             for snake in snakes:
                 snake.__init__()
             gameover = False
         elif a==2:
             TIME=120
-            POINTS=0
+            SCORE=0
             for snake in snakes:
                 snake.__init__()
             gameover = False
         elif a == 3:
             TIME = 180
-            POINTS = 0
+            SCORE = 0
             for snake in snakes:
                 snake.__init__()
             gameover = False
         elif a == 4:
             TIME = 300
-            POINTS = 0
+            SCORE = 0
             for snake in snakes:
                 snake.__init__()
             gameover = False
         elif a == 5:
             TIME = 600
-            POINTS = 0
+            SCORE = 0
             for snake in snakes:
                 snake.__init__()
             gameover = False
@@ -185,7 +180,7 @@ def main():
             screen.blit(gameovertext, (500, 250))
             gameover=True
         TIME = TIME - (1 / tick)
-        text = font.render(f"Points: {POINTS}", True, BLUE)
+        text = font.render(f"SCORE: {SCORE}", True, BLUE)
         screen.blit(text, (100 ,250))
         del font
         for snake in snakes:
@@ -217,7 +212,7 @@ def main():
                     for block in snake.blocks:
                         if block.checkifhit([mausx,mausy])==True:
                             snake.addblock()
-                            POINTS+=1
+                            SCORE+=1
                             break
 
 
@@ -231,7 +226,7 @@ def main():
                     for block in snake.blocks:
                         if block.checkifhit([pos[0], pos[1]]) == True:
                             snake.addblock()
-                            POINTS += 1
+                            SCORE += 1
                             break
             Diabolo_Rect = pygame.Rect(int(pos[0]) - 9, int(pos[1]) - 9, 18, 18)
             screen.blit(Diabolo, Diabolo_Rect)
