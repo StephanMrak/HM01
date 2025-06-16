@@ -9,12 +9,18 @@ def main():
     BLUE = (0, 191, 255)
     RED = (255, 0, 0)
     GREEN = (124, 252, 0)
+    colors=[]
+    colors.append(WHITE)
+    colors.append(BLUE)
+    colors.append(RED)
+    colors.append(GREEN)
+
     last_hit = []
     last_hit.append(0)
     size = hmsysteme.get_size()
-    print(size)
+    snakes=[]
     names = hmsysteme.get_playernames()
-    hmsysteme.put_button_names(["set time:60sek", "set time:120sek","set time:180sek","set time:300sek","set time:600sek"])
+    hmsysteme.put_button_names(["set time:60sek", "set time:120sek","set time:180sek","set time:300sek","set time:600sek", "add snake", "remove snake"])
     WIDTH=50
     POINTS=0
     TIME=60
@@ -67,9 +73,9 @@ def main():
 
 
 
-    class snake():
+    class Snake():
         def __init__(self):
-            self.color=GREEN
+            self.color=random.choice(colors)
             self.speed=1
             self.direction=[1,0]
             self.blocks=[]
@@ -122,8 +128,7 @@ def main():
 
 
 
-
-    newsnake=snake()
+    snakes.append(Snake())
     gameover=False
 
     while hmsysteme.game_isactive():
@@ -134,28 +139,39 @@ def main():
         if a==1:
             TIME=60
             POINTS=0
-            newsnake=snake()
+            for snake in snakes:
+                snake.__init__()
             gameover = False
         elif a==2:
             TIME=120
             POINTS=0
-            newsnake=snake()
+            for snake in snakes:
+                snake.__init__()
             gameover = False
         elif a == 3:
             TIME = 180
             POINTS = 0
-            newsnake = snake()
+            for snake in snakes:
+                snake.__init__()
             gameover = False
         elif a == 4:
             TIME = 300
             POINTS = 0
-            newsnake = snake()
+            for snake in snakes:
+                snake.__init__()
             gameover = False
         elif a == 5:
             TIME = 600
             POINTS = 0
-            newsnake = snake()
+            for snake in snakes:
+                snake.__init__()
             gameover = False
+        elif a == 6:
+            snakes.append(Snake())
+        elif a == 7:
+            if len(snakes)>1:
+                snakes.pop(-1)
+
 
 
         font = pygame.font.Font(None, 35)
@@ -172,10 +188,11 @@ def main():
         text = font.render(f"Points: {POINTS}", True, BLUE)
         screen.blit(text, (100 ,250))
         del font
-        newsnake.movesnake()
-        newsnake.draw()
-        if random.randrange(0,10)==5:
-            newsnake.changedirection()
+        for snake in snakes:
+            snake.movesnake()
+            snake.draw()
+            if random.randrange(0,10)==5:
+                snake.changedirection()
 
 
 
@@ -196,11 +213,12 @@ def main():
                 Diabolo_Rect = pygame.Rect(mausx - 9, mausy - 9, 18, 18)
                 screen.blit(Diabolo, Diabolo_Rect)
                 pygame.display.flip()
-                for block in newsnake.blocks:
-                    if block.checkifhit([mausx,mausy])==True:
-                        newsnake.addblock()
-                        POINTS+=1
-                        break
+                for snake in snakes:
+                    for block in snake.blocks:
+                        if block.checkifhit([mausx,mausy])==True:
+                            snake.addblock()
+                            POINTS+=1
+                            break
 
 
                 # pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
@@ -209,17 +227,16 @@ def main():
         if hmsysteme.hit_detected():
             pos = hmsysteme.get_pos()
             if not gameover:
-                for block in newsnake.blocks:
-                    if block.checkifhit([pos[0], pos[1]]) == True:
-                        newsnake.addblock()
-                        POINTS += 1
-                        break
-                Diabolo_Rect = pygame.Rect(int(pos[0]) - 9, int(pos[1]) - 9, 18, 18)
-                screen.blit(Diabolo, Diabolo_Rect)
-                pygame.display.flip()
-                #pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
-                hmsysteme.take_screenshot(screen)
-                newsnake.addblock()
+                for snake in snakes:
+                    for block in snake.blocks:
+                        if block.checkifhit([pos[0], pos[1]]) == True:
+                            snake.addblock()
+                            POINTS += 1
+                            break
+            Diabolo_Rect = pygame.Rect(int(pos[0]) - 9, int(pos[1]) - 9, 18, 18)
+            screen.blit(Diabolo, Diabolo_Rect)
+            pygame.display.flip()
+            hmsysteme.take_screenshot(screen)
 
         screen.blit(Diabolo, Diabolo_Rect)
         pygame.display.flip()
