@@ -10,7 +10,6 @@ def main():
     RED = (255, 0, 0)
     GREEN = (124, 252, 0)
     colors=[]
-    colors.append(WHITE)
     colors.append(BLUE)
     colors.append(RED)
     colors.append(GREEN)
@@ -89,36 +88,43 @@ def main():
 
 
         def changedirection(self):
-            self.direction=[random.randrange(-1,2),random.randrange(-1,2)]
+            self.possibledirections=[(-1,0),(0,-1),(1,0),(0,1),(1,1),(-1,-1),(-1,1),(1,-1)]
+            self.direction = random.choice(self.possibledirections)
+
+
+
 
         def movesnake(self):
-            for lastblock in self.blocks:
-                if lastblock.number==self.length-1:
-                    for firstblock in self.blocks:
-                        if firstblock.number==0:
-                            safe_x=firstblock.pos[0]+self.direction[0]*self.width
-                            safe_y=firstblock.pos[1]+self.direction[1]*self.width
-                            if safe_x>size[0]:
-                                safe_x=0
-                            elif safe_x<0:
-                                safe_x=size[0]
-                            elif safe_y>size[1]:
-                                safe_y=0
-                            elif safe_y<0:
-                                safe_y=size[1]
+            for block in self.blocks:
+                if block.number==self.length-1:
+                    lastblock=block
+                elif block.number == 0:
+                    firstblock=block
+                    firstblock.number=firstblock.number+1
+                else:
+                    block.number=block.number+1
+            nextpos=firstblock.pos[:]
+            nextpos[0] = nextpos[0] + self.direction[0] * self.width
+            nextpos[1] = nextpos[1] + self.direction[1] * self.width
+            if nextpos[0] > size[0]:
+                nextpos[0] = 0
+            elif nextpos[0] < 0:
+                nextpos[0] = size[0]
+            elif nextpos[1] > size[1]:
+                nextpos[1] = 0
+            elif nextpos[1] < 0:
+                nextpos[1] = size[1]
+            #last block is the next first block
+            lastblock.pos=nextpos[:]
+            lastblock.number=0
 
-                            lastblock.pos=[safe_x,safe_y]
-                            for block in self.blocks:
-                                if block.number==self.length-1:
-                                    block.number=0
-                                else:
-                                    block.number=block.number+1
 
-
-                            return
         def draw(self):
             for block in self.blocks:
-                pygame.draw.polygon(screen, self.color, block.getrect())
+                if block.number==0:
+                    pygame.draw.polygon(screen, WHITE, block.getrect())
+                else:
+                    pygame.draw.polygon(screen, self.color, block.getrect())
 
 
 
