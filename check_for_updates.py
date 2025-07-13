@@ -141,7 +141,7 @@ def CheckForUpdates():
             print(e)
             return
         if is_update_available(local_version, latest_version["tag_name"]):
-            print(f"✅ Update verfügbar! Lokal: {local_version} | Neueste: {latest_version["tag_name"]}")
+            print(f"Update verfügbar! Lokal: {local_version}  Neueste: {latest_version.get(tag_name)}")
             return True
         else:
             return False

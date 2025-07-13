@@ -103,7 +103,8 @@ def startscreen(processname,warmupqueue, activequeue):
     if hmsysteme.check_ifdebug():
         pygame.display.set_mode(size, pygame.locals.DOUBLEBUF|pygame.locals.OPENGL)
     else:
-        pygame.display.set_mode((0, 0), pygame.locals.DOUBLEBUF | pygame.locals.OPENGL | pygame.FULLSCREEN)
+        pygame.display.set_mode(size, pygame.locals.DOUBLEBUF|pygame.locals.OPENGL)
+        #pygame.display.set_mode((0, 0), pygame.locals.DOUBLEBUF | pygame.locals.OPENGL | pygame.FULLSCREEN)
 
 
     clock = pygame.time.Clock()

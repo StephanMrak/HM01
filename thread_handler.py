@@ -96,9 +96,9 @@ def main():
         ths.start()
         print("mobile hotspot process started")
 
-        t1 = multiprocessing.Process(target=led_calibration_temp.led_calibration_temp, args=("led_calibration_temp",tempqueue))
-        t1.start()
-        print("led calibration process started")
+        #t1 = multiprocessing.Process(target=led_calibration_temp.led_calibration_temp, args=("led_calibration_temp",tempqueue))
+        #t1.start()
+        #print("led calibration process started")
     
 
     t2 = multiprocessing.Process(target=hardware_com_micro.hardware_com_micro, args=("Hardware_com_micro", path, queue, queue4,prequeue,warmupqueue, size))
