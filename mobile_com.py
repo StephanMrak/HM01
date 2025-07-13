@@ -1,24 +1,15 @@
-from threading import Thread
 import multiprocessing
 import time
-import pygame
-import os
 import hmsysteme
 from check_for_updates import CheckForUpdates, UpdateSystem
 
-try:
-    import RPi.GPIO as GPIO
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(4, GPIO.OUT)
-    GPIO.output(4, 0)
-except:
-    pass
+
 
 width = '100%'
 height = '1000px'
 abt=[]
 
-def start_game(gamefile, backgroundqueue,warmupqueue):
+def start_game(gamefile, backgroundqueue):
     #backgroundqueue.put("close")
     hmsysteme.open_game()
     time.sleep(0.5)
@@ -54,16 +45,14 @@ def listchecker(ele,list):
             return False
     return True
 
-def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,backgroundqueue,tempqueue,warmupqueue, activequeue):
+def mobile_com(threadname,path2,gamefiles,backgroundqueue, debug_flag):
     import time
     import io
     import os
     import PIL.Image
-    import pickle
     asdf=[]
     backgroundqueue.put("open")
 
-    #import remi.gui as gui
     import remi.gui as gui
     from remi import start, App
     
@@ -208,18 +197,8 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             time.sleep(0.1)
             if hmsysteme.screenshot_refresh()== True:
                 self.image_widget.load(file_path_name=os.path.join(path,"screencapture.jpg"))
-                q1.put("ok")
 
-            if not q4.empty():
-                self.debuglbl.set_text(str(q4.get()))
 
-            if not tempqueue.empty():
-                self.templbl.set_text(str(tempqueue.get()))
-
-            if not activequeue.empty():
-                if activequeue.get()==True:
-                    activequeue.put(False)
-                    container3.set_enabled(True)
 
             if hmsysteme.game_isactive():
                 a = hmsysteme.get_button_names()
@@ -303,7 +282,7 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             for i in range(len(gamefiles)):
                 def f(widget,i=i):
                     close_game(asdf, abt, backgroundqueue)
-                    asdf.append(start_game(gamefiles[i],backgroundqueue,warmupqueue))
+                    asdf.append(start_game(gamefiles[i],backgroundqueue))
                     self.lbl.set_text(gamefiles[i]+" now runnning")
                     #print(asdf)
                 functions.append(f)       
@@ -363,7 +342,6 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
 
             tb.append(container,'Home')
             tb.append(container2,'Players')
-            container3.set_enabled(False)
             tb.append(container3, 'Games')
             tb.append(container4, 'Settings')
             
@@ -425,13 +403,7 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
             import os
             print("system reboot")
             os.system("sudo reboot")
-            
-        def reset_func(self, widget):		         
-            preq.put("0")
-            GPIO.output(4, 1)
-            time.sleep(0.1)
-            GPIO.output(4, 0)
-            print("system reset")
+
 
         def up_func(self,widget):
             UpdateSystem()
@@ -444,6 +416,8 @@ def mobile_com(threadname,path2,qgn,q1,q2,q3,q4,q5,preq,size,gamefiles,hwqueue,b
 
 
     # starts the web server
-    start(HMInterface,start_browser=False)
-    #start(HMInterface, address='0.0.0.0', port=8081, multiple_instance=False, enable_file_cache=True, update_interval=0.1, start_browser=False)
+    if debug_flag:
+        start(HMInterface,start_browser=False)
+    else:
+        start(HMInterface, address='0.0.0.0', port=8081, multiple_instance=False, enable_file_cache=True, update_interval=0.1, start_browser=False)
     

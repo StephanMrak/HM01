@@ -1,10 +1,9 @@
-def startscreen(processname,warmupqueue, activequeue):
+def startscreen(processname, debug_flag):
     import pygame
     import pygame.locals
     import hmsysteme
     import OpenGL.GL
     import OpenGL.GLU
-    warmuptime=10
     verticies = (
         ( 1, -1, -1), # 0
         ( 1,  1, -1), # 1
@@ -100,11 +99,10 @@ def startscreen(processname,warmupqueue, activequeue):
     pygame.init()
 
     size = hmsysteme.get_size()
-    if hmsysteme.check_ifdebug():
+    if debug_flag:
         pygame.display.set_mode(size, pygame.locals.DOUBLEBUF|pygame.locals.OPENGL)
     else:
-        pygame.display.set_mode(size, pygame.locals.DOUBLEBUF|pygame.locals.OPENGL)
-        #pygame.display.set_mode((0, 0), pygame.locals.DOUBLEBUF | pygame.locals.OPENGL | pygame.FULLSCREEN)
+        pygame.display.set_mode((0, 0), pygame.locals.DOUBLEBUF | pygame.locals.OPENGL | pygame.FULLSCREEN)
 
 
     clock = pygame.time.Clock()
@@ -153,13 +151,6 @@ def startscreen(processname,warmupqueue, activequeue):
         draw_text("Verbinden Sie sich mit dem WLAN 'HM01'  ", -4.5, -1.875)
         draw_text("Geben Sie in Ihrem Webbrowser folgendes als URL ein: 192.168.1.1:8081  ", -4.5, -2.25)
 
-        if not warmupqueue.empty():
-            warmuptime = warmupqueue.get()
-
-        if warmuptime > 0:
-            draw_text("LEDs auf Betriebstemperatur bringen: " + str(warmuptime), -4.5, 2, (255,0,0),60)
-        else:
-            activequeue.put(True)
 
         pygame.display.flip()
         clock.tick(30)

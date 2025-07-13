@@ -36,7 +36,7 @@ REF_VOLTAGE = 3.3
 stop_flag = multiprocessing.Value('b', False)  # Shared flag for stopping
 
 d_lenght = 0.341
-pixelw = d_lenght / hmsysteme.get_size[0]
+pixelw = d_lenght / hmsysteme.get_size()[0]
 
 
 widthD, heigthD = 0.370, 0.215
@@ -674,26 +674,7 @@ def load_and_enqueue_data(npy_file, data_queue):
     print("Data from npy file loaded into queue.")
 
 
-def hardware_com_micro(threadname, path, q, q4, preq, warmupqueue, size):
-    wait_time=1
-    print("waiting for " +str(wait_time)+" seconds to warm up LEDs")
-    while wait_time>0:
-        warmupqueue.put(wait_time)
-        wait_time=wait_time-1
-        time.sleep(1)
-    wait_time=0
-    warmupqueue.put(wait_time)
-    if hmsysteme.check_ifdebug()==True:
-        return
-
-    parser = argparse.ArgumentParser(description="SPI Data Processing")
-    parser.add_argument("-p", action="store_true", help="Enable plotting")
-    parser.add_argument("-r", action="store_true", help="Enable processing")
-    parser.add_argument("-d", action="store_true", help="Enable debug mode (save batch data to disk)")
-    parser.add_argument("-f", type=str, help="File name to load data from (optional)")
-    parser.add_argument("-t", type=int, default=700, choices=range(10, 1024), help="Threshold value. Below 512 will check for minima, above for maxima (default: 700, min: 10, max: 1023)")
-    args = parser.parse_args()
-
+def hardware_com_micro(threadname, debug_flag):
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
 
