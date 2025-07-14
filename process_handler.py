@@ -31,30 +31,12 @@ def main():
         if game.endswith(".py"):
             gamefiles.append(game.replace('.py', ''))
 
-    modules = []
-    for x in gamefiles:
-        try:
-            modules.append(__import__(x))
-            print("Successfully imported", x, '.')
-        except ImportError:
-            print("Error importing", x, '.')
-    print(gamefiles)
 
     backgroundqueue = multiprocessing.Queue(maxsize=1)
 
 
     # create shared memory to share data between processes
     hmsysteme.create_shared_memory()
-    smd = SharedMemoryDict(name='data', size=1024)
-    smd["Active"] = False
-    smd["Hit"] = False
-    smd["Pos"] = False
-    smd["Players"] = False
-    smd["Screen"] = False
-    smd["RGB"] = False
-    smd["Temp"] = False
-    smd["Action"] = False
-    smd["Buttons"] = False
 
     if args.debug:
         pass
