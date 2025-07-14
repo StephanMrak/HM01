@@ -1,6 +1,4 @@
 import signal
-import spidev
-import gpiod
 import numpy as np
 import matplotlib.pyplot as plt
 import multiprocessing
@@ -11,8 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 import os
 from datetime import timedelta, datetime
 from scipy.signal import find_peaks
-import scipy
-import itertools
 import copy
 import hmsysteme
 import scipy
