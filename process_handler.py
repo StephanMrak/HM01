@@ -22,28 +22,14 @@ def main():
 
     path = os.path.realpath(__file__)
     path = path.replace('process_handler.py', '')
-
-
     sys.path.append(os.path.join(path, "games"))
+    gamesdir = os.listdir(os.path.join(path, "games"))
 
+    gamefiles = []
 
-    def list_files(path='.'):
-        for filename in os.listdir(path):
-            if os.path.isfile(os.path.join(path, filename)):
-                print(filename)
-            else:
-                list_files(os.path.join(path, filename))
-
-    gamefiles = os.listdir(os.path.join(path, "games"))
-    try:
-        gamefiles.remove('__pycache__')
-    except:
-        pass
-    gamefiles.remove('game_template.py')
-    gamefiles.remove('pics')
-
-    for x in range(len(gamefiles)):
-        gamefiles[x] = gamefiles[x].replace('.py', '')
+    for game in gamesdir:
+        if game.endswith(".py"):
+            gamefiles.append(game.replace('.py', ''))
 
     modules = []
     for x in gamefiles:
