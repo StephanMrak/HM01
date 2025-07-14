@@ -46,7 +46,7 @@ def main():
     t2.start()
     print("hardware_com_micro process started")
 
-    t3 = multiprocessing.Process(target=startscreen.startscreen, args=("startscreen",args.debug))
+    t3 = multiprocessing.Process(target=startscreen.startscreen, args=("startscreen",backgroundqueue,args.debug))
     t3.start()
     print("background process started")
 

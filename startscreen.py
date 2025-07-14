@@ -1,4 +1,4 @@
-def startscreen(processname, debug_flag):
+def startscreen(processname, backgroundqueue,debug_flag):
     import pygame
     import pygame.locals
     import hmsysteme
