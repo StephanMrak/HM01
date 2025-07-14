@@ -7,9 +7,7 @@ def main():
     import mobile_com
     import hotspot
     import startscreen
-    import hmsysteme
     import argparse
-    from shared_memory_dict import SharedMemoryDict
 
     process_parser = argparse.ArgumentParser(description='Start the HM01 Shooting Range.')
     process_parser.add_argument('--debug', action='store_true', help='Enable debug output.')
@@ -34,9 +32,6 @@ def main():
 
     backgroundqueue = multiprocessing.Queue(maxsize=1)
 
-
-    # create shared memory to share data between processes
-    hmsysteme.create_shared_memory()
 
     if args.debug:
         pass
