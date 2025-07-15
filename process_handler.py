@@ -57,6 +57,28 @@ def main():
     t4.start()
     print("mobile_com process started")
 
+    def gpio_callback(channel):
+        if not GPIO.input(BUTTON_GPIO):
+            hmsysteme.set_busy(True)
+            print("busy True")
+        else:
+            hmsysteme.set_busy(False)
+            print("busy False")
+
+
+    try:
+        import RPi.GPIO as GPIO
+        BUTTON_GPIO = 16
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(BUTTON_GPIO, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+        GPIO.add_event_detect(BUTTON_GPIO, GPIO.BOTH,
+                              callback=gpio_callback, bouncetime=50)
+
+    except:
+        pass
+
+
 
 
 if __name__ == '__main__':
