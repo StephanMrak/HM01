@@ -98,8 +98,6 @@ def main():
                         curr_player = 0
                     else:
                         curr_player += 1
-                    print("gepoppt")
-                    print(i)
             pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
             hmsysteme.take_screenshot(screen)
 
@@ -115,9 +113,6 @@ def main():
                             curr_player = 0
                         else:
                             curr_player += 1
-                        print("gepoppt")
-                        print(i)
-                print(pos)
                 pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
                 hmsysteme.take_screenshot(screen)
                 
