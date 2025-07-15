@@ -50,7 +50,7 @@ def main():
         path = path.replace('TowerDefense.py', '')
 
     size = hmsysteme.get_size()
-    if hmsysteme.check_ifdebug():
+    if hmsysteme.get_debug()==True:
         screen = pygame.display.set_mode(size)
     else:
         screen=pygame.display.set_mode((0, 0), pygame.FULLSCREEN)

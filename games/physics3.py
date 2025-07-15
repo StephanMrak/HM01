@@ -33,7 +33,7 @@ def main():
 
 
 	pygame.init()
-	if hmsysteme.check_ifdebug():
+	if hmsysteme.get_debug()==True:
 		screen = pygame.display.set_mode(size)
 	else:
 		screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)

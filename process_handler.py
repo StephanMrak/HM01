@@ -8,6 +8,7 @@ def main():
     import hotspot
     import startscreen
     import argparse
+    import hmsysteme
 
     process_parser = argparse.ArgumentParser(description='Start the HM01 Shooting Range.')
     process_parser.add_argument('--debug', action='store_true', help='Enable debug output.')
@@ -17,7 +18,7 @@ def main():
         print('Debug mode is enabled.')
     else:
         print('Debug mode is disabled.')
-
+    hmsysteme.set_debug(args.debug)
     path = os.path.realpath(__file__)
     path = path.replace('process_handler.py', '')
     sys.path.append(os.path.join(path, "games"))
