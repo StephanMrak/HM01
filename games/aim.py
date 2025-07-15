@@ -8,8 +8,8 @@ def main():
     BLUE= (0, 191, 255)
     RED = (255, 0, 0)
     GREEN = (124, 252, 0)
-    arrey = []
-    anzahl = 10
+    rings = []
+    num_of_rings = 10
     last_hit = []
     last_hit.append(0)
     size = hmsysteme.get_size()
@@ -22,7 +22,7 @@ def main():
         points.append(0)
     curr_player = 0
 
-    class MyClass:   
+    class Ring():
         def __init__(self):
             self.radius = random.randint(70, 100)
             self.x = hmsysteme.get_size()[0]/2
@@ -50,12 +50,12 @@ def main():
 
         def hit(self, fpos):
             if self.radius**2 >= ((fpos[0] - self.x) ** 2 + (fpos[1] - self.y) ** 2) >= (self.rscale * (self.num - 1))**2:
-                self.color = (255 / anzahl * self.num, 255 - (255 * self.num / anzahl), 0)
+                self.color = (255 / num_of_rings * self.num, 255 - (255 * self.num / num_of_rings), 0)
                 self.destruct = True
-                last_hit[0] = 100 - ((self.num - 1) * (100 / anzahl))
+                last_hit[0] = 100 - ((self.num - 1) * (100 / num_of_rings))
                 points[curr_player] += last_hit[0]
                 font = pygame.font.Font(None, 28)
-                text = font.render(str("letzter Treffer : " + str(int(last_hit[0]))), True, BLUE)
+                text = font.render(str("last hit : " + str(int(last_hit[0]))), True, BLUE)
                 screen.blit(text, (150 - text.get_width() // 2, 240 - text.get_height() // 2))
                 del font
                 return True                
@@ -71,16 +71,16 @@ def main():
     pygame.mouse.set_visible(False)
     clock = pygame.time.Clock()
 
-    for i in range(0, anzahl):
-        arrey.append(MyClass())
-        arrey[i].rscale = 25
-        arrey[i].radius = (i + 1) * arrey[i].rscale
-        arrey[i].num = i + 1
+    for i in range(0, num_of_rings):
+        rings.append(Ring())
+        rings[i].rscale = 25
+        rings[i].radius = (i + 1) * rings[i].rscale
+        rings[i].num = i + 1
     while hmsysteme.game_isactive():
         screen.fill(BLACK)
 
-        for i in range(0, anzahl):
-            arrey[i].f()
+        for i in range(0, num_of_rings):
+            rings[i].f()
         font = pygame.font.Font(None, 28)
 
         pygame.draw.circle(screen, BLUE, [50, 300 + (40 * (curr_player + 1))], 10, 10)
@@ -92,8 +92,8 @@ def main():
         if hmsysteme.hit_detected():
             pos = hmsysteme.get_pos()
 
-            for i in range(0, len(arrey)):
-                if arrey[i].hit(pos):
+            for i in range(0, len(rings)):
+                if rings[i].hit(pos):
                     if curr_player == len(names)-1:
                         curr_player = 0
                     else:
@@ -107,8 +107,8 @@ def main():
                 pygame.quit()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = event.pos
-                for i in range(0, len(arrey)):
-                    if arrey[i].hit(pos):
+                for i in range(0, len(rings)):
+                    if rings[i].hit(pos):
                         if curr_player == len(names)-1:
                             curr_player = 0
                         else:
