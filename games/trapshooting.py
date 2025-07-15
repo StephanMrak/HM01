@@ -52,7 +52,7 @@ def main():
             if self.radius**2 >= ((fpos[0] - self.x) ** 2 + (fpos[1] - self.y) ** 2) >= (self.rscale * (self.num - 1))**2:
                 last_hit[0] = 10000/self.radius
                 points[curr_player] += last_hit[0]
-                font = pygame.font.SysFont(pygame.font.get_fonts()[0], 28)
+                font = pygame.font.Font(None, 28)
                 text = font.render(str(str(int(last_hit[0]))), True, BLUE)
                 screen.blit(text, (fpos[0] - text.get_width()+100 // 2, fpos[1] - text.get_height()+20 // 2))
                 self.color = GREEN
@@ -87,7 +87,7 @@ def main():
                 arrey[i].__init__()
         count=0
 
-        font = pygame.font.SysFont(pygame.font.get_fonts()[0], 28)
+        font = pygame.font.Font(None, 28)
         pygame.draw.circle(screen, BLUE, [50, 300 + (40 * (curr_player + 1))], 10, 10)
         for i in range(0, len(names)):
             text = font.render(str(names[i] + " " + str(int(points[i]))), True, BLUE)

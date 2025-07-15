@@ -1,8 +1,7 @@
 def main():    
     import random
     import pygame   
-    import math
-    import time
+
     import hmsysteme
     WHITE = (255, 255, 255)
     BLACK = (0, 0, 0)
@@ -15,7 +14,6 @@ def main():
     last_hit.append(0)
     size = hmsysteme.get_size()
     print(size)
-    pos = ([0, 0])
     names = hmsysteme.get_playernames()
     if not names:
         names = "dummy"
@@ -56,7 +54,7 @@ def main():
                 self.destruct = True
                 last_hit[0] = 100 - ((self.num - 1) * (100 / anzahl))
                 points[curr_player] += last_hit[0]
-                font = pygame.font.SysFont(pygame.font.get_fonts()[0], 28)
+                font = pygame.font.Font(None, 28)
                 text = font.render(str("letzter Treffer : " + str(int(last_hit[0]))), True, BLUE)
                 screen.blit(text, (150 - text.get_width() // 2, 240 - text.get_height() // 2))
                 del font
@@ -65,8 +63,10 @@ def main():
                 return False
 
     pygame.init()
-    #screen=pygame.display.set_mode(size, pygame.NOFRAME)
-    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    if hmsysteme.get_debug() == True:
+        screen = pygame.display.set_mode(size)
+    else:
+        screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     pygame.display.set_caption("my game")
     pygame.mouse.set_visible(False)
     clock = pygame.time.Clock()
@@ -76,13 +76,12 @@ def main():
         arrey[i].rscale = 25
         arrey[i].radius = (i + 1) * arrey[i].rscale
         arrey[i].num = i + 1
-    hmsysteme.put_rgbcolor((0,0,0))
     while hmsysteme.game_isactive():
         screen.fill(BLACK)
 
         for i in range(0, anzahl):
             arrey[i].f()
-        font = pygame.font.SysFont(pygame.font.get_fonts()[0], 28)
+        font = pygame.font.Font(None, 28)
 
         pygame.draw.circle(screen, BLUE, [50, 300 + (40 * (curr_player + 1))], 10, 10)
         for i in range(0, len(names)):
@@ -101,7 +100,6 @@ def main():
                         curr_player += 1
                     print("gepoppt")
                     print(i)
-                    hmsysteme.put_rgbcolor(arrey[i].color)
             pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
             hmsysteme.take_screenshot(screen)
 
@@ -119,7 +117,6 @@ def main():
                             curr_player += 1
                         print("gepoppt")
                         print(i)
-                        hmsysteme.put_rgbcolor(arrey[i].color)
                 print(pos)
                 pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
                 hmsysteme.take_screenshot(screen)

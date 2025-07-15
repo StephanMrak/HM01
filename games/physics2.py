@@ -170,7 +170,7 @@ def main():
 
 	while hmsysteme.game_isactive():
 		screen.fill(BLACK)
-		font = pygame.font.SysFont(pygame.font.get_fonts()[0], 28)
+		font = pygame.font.Font(None, 28)
 		pygame.draw.circle(screen, BLUE, [50, 300 + (40 * (curr_player + 1))], 10, 10)
 		for i in range(0, len(names)):
 			text = font.render(str(names[i] + " " + str(int(points[i]))), True, BLUE)

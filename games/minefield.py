@@ -50,7 +50,7 @@ def main():
         zaehler=0
         radius=50
         fontheight=radius
-        font = pygame.font.SysFont(pygame.font.get_fonts()[0], fontheight)
+        font = pygame.font.Font(None, 28)
         for i in range(radius,size[0]-radius,200):
             for j in range(radius,size[1]-radius,200):
                 #print(i,j)

@@ -164,13 +164,13 @@ def main():
         screen.fill(HIMMELBLAU)
 
         #print something to the pygame window
-        font = pygame.font.SysFont(pygame.font.get_fonts()[0], 50)
+        font = pygame.font.Font(None, 50)
         
         if ResetGame:
             if iWait < 200:
                 iWait += 1
                 sWinner = str(Namenliste[aktivePlayer]) + " Wins!!!"
-                font = pygame.font.SysFont(pygame.font.get_fonts()[0], 80)
+                font = pygame.font.Font(None, 80)
                 text = font.render((str(sWinner)), True, (239, 116, 33))
             else:
                 Namenliste = hmsysteme.get_playernames()
