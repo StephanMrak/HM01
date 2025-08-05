@@ -77,6 +77,8 @@ def main():
         rings[i].radius = (i + 1) * rings[i].rscale
         rings[i].num = i + 1
     while hmsysteme.game_isactive():
+        while hmsysteme.get_busy():
+            pass
         screen.fill(BLACK)
 
         for i in range(0, num_of_rings):

@@ -156,4 +156,4 @@ def startscreen(processname, backgroundqueue,debug_flag):
         clock.tick(30)
 
 if __name__ == '__main__':
-    startscreen()
+    startscreen(None,None,True)

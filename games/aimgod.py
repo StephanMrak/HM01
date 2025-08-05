@@ -24,7 +24,6 @@ def main():
     for i in range(0, len(names)):
         points.append(0)
     curr_player = 0
-    hmsysteme.put_rgbcolor((0,0,0))
     class MyClass:   
         def __init__(self):
             self.radius = 250
@@ -59,9 +58,6 @@ def main():
                 self.radius = 250
                 self.dx = random.randint(-150,150)
                 self.dy = random.randint(-150, 150)
-
-                hmsysteme.put_rgbcolor([int(255- (last_hit[0]-5)*((255-0)/(250-5))),int((last_hit[0]-5)*((255-0)/(250-5))), 0])
-
                 del font
                 return True
             else:
@@ -69,7 +65,10 @@ def main():
 
     pygame.init()
     #screen=pygame.display.set_mode(size, pygame.NOFRAME)
-    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+    if hmsysteme.get_debug() == True:
+        screen = pygame.display.set_mode(size)
+    else:
+        screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     pygame.display.set_caption("my game")
     pygame.mouse.set_visible(False)
     clock = pygame.time.Clock()
@@ -83,7 +82,6 @@ def main():
         if hit == True:
             rgb_counter=rgb_counter+1
             if rgb_counter==10:
-                hmsysteme.put_rgbcolor((0,0,0))
                 hit=False
                 rgb_counter=0
 
@@ -110,7 +108,6 @@ def main():
                         curr_player += 1
                     print("gepoppt")
                     print(i)
-                    hmsysteme.put_rgbcolor((0,255,0))
                     hit=True
                     #hmsysteme.put_rgbcolor(arrey[i].color)
             pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)
@@ -130,7 +127,6 @@ def main():
                             curr_player += 1
                         print("gepoppt")
                         print(i)
-                        hmsysteme.put_rgbcolor((0, 255, 0))
                         hit=True
                         #hmsysteme.put_rgbcolor(arrey[i].color)
                 pygame.draw.circle(screen, RED, [int(pos[0]), int(pos[1])], int(3 / 0.3), 5)

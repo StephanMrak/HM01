@@ -2,172 +2,60 @@ import multiprocessing
 import time
 import hmsysteme
 from check_for_updates import CheckForUpdates, UpdateSystem
+import subprocess
 
+WIDTH = '100%'
+HEIGHT = '1000px'
+action_buttons = []
 
-
-width = '100%'
-height = '1000px'
-abt=[]
 
 def start_game(gamefile, backgroundqueue):
-    #backgroundqueue.put("close")
     hmsysteme.open_game()
     time.sleep(0.5)
-    mod_game=(__import__(gamefile))
-    print(mod_game)
-    p = multiprocessing.Process(target=mod_game.main)
-    print(p)
-    p.start()
-    #time.sleep(1)
-    return p
+    game_module = __import__(gamefile)
+    process = multiprocessing.Process(target=game_module.main)
+    process.start()
+    return process
 
-    
-def close_game(asd, abt, backgroundqueue):
-    for i in range(0,len(asd)):
-        if asd[i].is_alive():           
+
+def close_game(game_processes, buttons, backgroundqueue):
+    for process in game_processes:
+        if process.is_alive():
             hmsysteme.close_game()
             hmsysteme.put_button_names(False)
             time.sleep(0.5)
-            asd[i].terminate()
-            print(asd[i])
-    try:
-        for i in range(0, len(abt)):
-            abt[i].set_text("no function")
-            abt[i].set_enabled(False)
-        #backgroundqueue.put("open")
-    except:
-        pass
+            process.terminate()
+    for button in buttons:
+        try:
+            button.set_text("no function")
+            button.set_enabled(False)
+        except:
+            pass
 
 
-def listchecker(ele,list):
-    for element in list:
-        if element[0]==ele:
-            return False
-    return True
+def is_name_unique(name, players):
+    return all(player[0] != name for player in players)
 
-def mobile_com(threadname,path2,gamefiles,backgroundqueue, debug_flag):
-    import time
-    import io
+
+def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
     import os
+    import io
     import PIL.Image
-    asdf=[]
-    backgroundqueue.put("open")
-
     import remi.gui as gui
     from remi import start, App
-    
-    path=hmsysteme.get_path()
 
+    path = hmsysteme.get_path()
+    game_processes = []
+    backgroundqueue.put("open")
 
+    container_home = gui.VBox(width=WIDTH, height=HEIGHT, style={'background': '#404040', 'color': 'white'})
+    container_players = gui.VBox(width=WIDTH, height=HEIGHT, style={'background': '#404040', 'color': 'white'})
+    container_games = gui.VBox(width=WIDTH, height=HEIGHT, style={'background': '#404040', 'color': 'white'})
+    container_settings = gui.VBox(width=WIDTH, height=HEIGHT, style={'background': '#404040', 'color': 'white'})
 
-
-
-    container_players_added = gui.VBox(width=width, height=height,
-                                       style={'padding-left': '-200px', 'font-size': '15px', 'align': 'left'})
-    container_players_added.style["background"] = "#404040"
-    container_players_added.style["color"] = "white"
-    container = gui.VBox(width=width, height=height,
-                         style={'padding-left': '0px', 'font-size': '15px', 'align': 'left'})
-    container.style["background"] = "#404040"
-    container2 = gui.VBox(width=width, height=height,
-                          style={'padding-left': '0px', 'font-size': '15px', 'align': 'left'})
-    container2.style["background"] = "#404040"
-    container3 = gui.VBox(width=width, height=height,
-                          style={'padding-left': '0px', 'font-size': '15px', 'align': 'left'})
-    container3.style["background"] = "#404040"
-    container4 = gui.VBox(width=width, height=height,
-                          style={'padding-left': '0px', 'font-size': '15px', 'align': 'left'})
-    container4.style["background"] = "#404040"
-
-    def fill_grid_with_playernames():
-        def on_text_area_change(self, widget):
-
-            playernames = hmsysteme.get_playerstatus()
-            if playernames == False:
-                playernames = []
-            if txt.get_text() != "" and len(txt.get_text())<20:
-                if listchecker(txt.get_text(),playernames)==True:
-
-                    playernames.append([txt.get_text(),True])
-                    txt.set_text("")
-                    hmsysteme.put_playernames(playernames)
-                    fill_grid_with_playernames()
-
-        if hmsysteme.get_playerstatus() != False:
-            playernames = hmsysteme.get_playerstatus()
-        else:
-            playernames=[]
-        lbl = gui.Label('input player name: ', width='50%', height='35px',
-                              style={'font-size': '25px', 'text-align': 'left'})
-        lbl.style["color"] = "white"
-
-        txt = gui.TextInput(width='30%', height='35px', style={'font-size': '30px', 'text-align': 'left'})
-        txt.style["background"] = "#606060"
-        txt.style["color"] = "white"
-        txt.onchange.do(on_text_area_change)
-        container2.empty()
-        container2.append(lbl)
-        container2.append(txt)
-        txtblank=gui.Label('', width='50%', height='35px',
-                              style={'font-size': '25px', 'text-align': 'left'})
-        container2.append(txtblank)
-
-        grid = gui.GridBox(width=500)
-        grid.style["background"] = "#404040"
-        grid.style["color"] = "white"
-        asd = []
-        checka = []
-        deletea=[]
-        functionsc = []
-        deletefunctions=[]
-        for i in range(0, len(playernames)):
-            asd.append(['delete' + str(i + 1),'check' + str(i + 1), 'label' + str(i + 1)])
-        grid.define_grid(asd)
-        for i in range(0, len(playernames)):
-            checka.append(gui.CheckBox(playernames[i][1],width='50px', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'}))
-            button=gui.Button('DELETE',width='130px', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
-            button.style["background"] = "red"
-            button.style["box-shadow"] = "none"
-            deletea.append(button)
-
-            def f(widget, newValue, i=i):
-                if newValue == True:
-                    playernames[i][1] = True
-                else:
-                    playernames[i][1] = False
-                hmsysteme.put_playernames(playernames)
-
-
-            def deletefunction(widget,i=i):
-                playernames.pop(i)
-                hmsysteme.put_playernames(playernames)
-                fill_grid_with_playernames()
-
-
-
-
-            functionsc.append(f)
-            deletefunctions.append(deletefunction)
-            checka[i].onchange.do(functionsc[i])
-            deletea[i].onclick.do(deletefunctions[i])
-
-
-            lbl = gui.Label(playernames[i][0], width='300px', height='50px' ,margin='1%',style={'font-size': '30px', 'text-align': 'left'})
-            grid.append({'delete' + str(i + 1): deletea[i],'label' + str(i + 1): lbl, 'check' + str(i + 1): checka[i]})
-            grid.set_row_gap(20)
-            grid.set_column_gap(20)
-        container2.append(grid)
-
-
-
-
-
-    class PILImageViewverWidget(gui.Image):
-        def __init__(self, pil_image=None, **kwargs):
-            super(PILImageViewverWidget, self).__init__(os.path.join(path,"screencapture.jpg"), **kwargs)
-            #super(PILImageViewverWidget, self).__init__(r"C:\Users\49176\Dropbox\HM01", **kwargs)
-            #super(PILImageViewverWidget, self).__init__("/home/stan/Dropbox/HM01/screen_capture.png", **kwargs)
-            
+    class PILImageViewer(gui.Image):
+        def __init__(self, **kwargs):
+            super().__init__(os.path.join(path, "screencapture.jpg"), **kwargs)
             self._buf = None
 
         def load(self, file_path_name):
@@ -177,8 +65,8 @@ def mobile_com(threadname,path2,gamefiles,backgroundqueue, debug_flag):
             self.refresh()
 
         def refresh(self):
-            i = int(time.time() * 1e6)
-            self.attributes['src'] = "/%s/get_image_data?update_index=%d" % (id(self), i)
+            timestamp = int(time.time() * 1e6)
+            self.attributes['src'] = f"/{id(self)}/get_image_data?update_index={timestamp}"
 
         def get_image_data(self, update_index):
             if self._buf is None:
@@ -186,238 +74,189 @@ def mobile_com(threadname,path2,gamefiles,backgroundqueue, debug_flag):
             self._buf.seek(0)
             headers = {'Content-type': 'image/jpg'}
             return [self._buf.read(), headers]
-    
-        
-    
+
+    def refresh_player_list():
+        container_players.empty()
+
+        label = gui.Label('Input Player Name:', width='50%', height='35px',
+                          style={'font-size': '25px', 'text-align': 'left', 'color': 'white'})
+        input_name = gui.TextInput(width='30%', height='35px',
+                                   style={'font-size': '30px', 'text-align': 'left', 'background': '#606060',
+                                          'color': 'white'})
+
+        def on_name_entered(widget, new_value):
+            name = input_name.get_text()
+            if name and len(name) < 20:
+                current_players = hmsysteme.get_playerstatus() or []
+                if is_name_unique(name, current_players):
+                    current_players.append([name, True])
+                    hmsysteme.put_playernames(current_players)
+                    refresh_player_list()
+
+        input_name.onchange.do(on_name_entered)
+        container_players.append(label)
+        container_players.append(input_name)
+        container_players.append(gui.Label('', height='10px'))
+
+        player_list = hmsysteme.get_playerstatus() or []
+        grid = gui.GridBox(width=500)
+        grid.style.update({"background": "#404040", "color": "white"})
+
+        layout = [['delete' + str(i), 'check' + str(i), 'label' + str(i)] for i in range(len(player_list))]
+        grid.define_grid(layout)
+
+        for i, (player_name, is_active) in enumerate(player_list):
+            checkbox = gui.CheckBox(is_active, width='50px', height='50px', margin='1%',
+                                    style={'font-size': '20px', 'text-align': 'center'})
+            label = gui.Label(player_name, width='300px', height='50px', margin='1%',
+                              style={'font-size': '30px', 'text-align': 'left'})
+            delete_button = gui.Button('DELETE', width='130px', height='50px', margin='1%',
+                                       style={'font-size': '20px', 'text-align': 'center', 'background': 'red'})
+
+            def toggle_active(widget, new_value, index=i):
+                player_list[index][1] = new_value
+                hmsysteme.put_playernames(player_list)
+
+            def delete_player(widget, index=i):
+                player_list.pop(index)
+                hmsysteme.put_playernames(player_list)
+                refresh_player_list()
+
+            checkbox.onchange.do(toggle_active)
+            delete_button.onclick.do(delete_player)
+            grid.append({f'delete{i}': delete_button, f'check{i}': checkbox, f'label{i}': label})
+
+        grid.set_row_gap(20)
+        grid.set_column_gap(20)
+        container_players.append(grid)
+
     class HMInterface(App):
         def __init__(self, *args):
-            super(HMInterface, self).__init__(*args)
-            
+            super().__init__(*args)
+
         def idle(self):
             time.sleep(0.1)
-            if hmsysteme.screenshot_refresh()== True:
-                self.image_widget.load(file_path_name=os.path.join(path,"screencapture.jpg"))
-
-
+            if hmsysteme.screenshot_refresh():
+                self.image_widget.load(file_path_name=os.path.join(path, "screencapture.jpg"))
 
             if hmsysteme.game_isactive():
-                a = hmsysteme.get_button_names()
-                if a!= False:
-                    try:
-                        for i in range(0, len(abt)):
-                            if i < len(a):
-                                abt[i].set_text(a[i])
-                                abt[i].set_enabled(True)
-                            else:
-                                abt[i].set_text("no function")
-                                abt[i].set_enabled(False)
-                    except:
-                        pass
+                button_names = hmsysteme.get_button_names()
+                if button_names:
+                    for i, button in enumerate(action_buttons):
+                        if i < len(button_names):
+                            button.set_text(button_names[i])
+                            button.set_enabled(True)
+                        else:
+                            button.set_text("no function")
+                            button.set_enabled(False)
 
-
-
-            
-           
         def main(self):
-            bt=[]
-            global abt
-            functions=[]
-            global width
-            global height
-            tb = gui.TabBox(width=width ,style={'color': 'white', 'background-color': '#404040','font-size':'20px'})
+            global action_buttons
+            tab_box = gui.TabBox(width=WIDTH,
+                                 style={'color': 'white', 'background-color': '#404040', 'font-size': '20px'})
 
+            self.status_label = gui.Label('No game running yet', width='100%', height='35px',
+                                          style={'font-size': '25px', 'text-align': 'left', 'color': 'white'})
+            container_home.append(self.status_label)
 
-            #container = gui.VBox(width=500, height=650)
+            self.image_widget = PILImageViewer(width=WIDTH)
+            self.image_widget.load(file_path_name=os.path.join(path2, "logo.jpg"))
+            container_home.append(self.image_widget)
 
+            for i in range(9):
+                def button_action(widget, index=i):
+                    hmsysteme.put_action(index + 1)
 
+                button = gui.Button("no function", width='31%', height='50px', margin='1%',
+                                    style={'font-size': '20px', 'text-align': 'center', 'background': '#606060'})
+                button.onclick.do(button_action)
+                button.set_enabled(False)
+                action_buttons.append(button)
+                container_home.append(button)
 
-            
-            self.lbl = gui.Label('no game running yet', width='100%', height='35px',style={'font-size': '25px', 'text-align': 'left'})#str(q.get()))
-            self.lbl.style["color"]="white"
-            self.lbl_foto = gui.Label('-')
-            self.lbl_count = gui.Label('-')
-            
-            for i in range (len(gamefiles)):
-                bt.append(gui.Button('run %s' %(str(gamefiles[i])),width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'}))
-                bt[i].style["background"] = "#606060"
-                bt[i].style["box-shadow"] = "none"
-                
-            b1 = gui.Button('Close all',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
-            b1.style["background"] = "#606060"
-            b1.style["box-shadow"] = "none"
-            b2 = gui.Button('Stop Server',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
-            b2.style["background"] = "#606060"
-            b2.style["box-shadow"] = "none"
-            b3 = gui.Button('System Shutdown',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
-            b3.style["background"] = "#606060"
-            b3.style["box-shadow"] = "none"
-            b4 = gui.Button('System reset',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
-            b4.style["background"] = "#606060"
-            b4.style["box-shadow"] = "none"
-            b5 = gui.Button('System reboot',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
-            b5.style["background"] = "#606060"
-            b5.style["box-shadow"] = "none"
-            b6 = gui.Button('Check for Updates',width='31%', height='50px' ,margin='1%',style={'font-size': '20px', 'text-align': 'center'})
-            b6.style["background"] = "#606060"
-            b6.style["box-shadow"] = "none"
+            for i, game in enumerate(gamefiles):
+                def start_game_callback(widget, index=i):
+                    close_game(game_processes, action_buttons, backgroundqueue)
+                    game_processes.append(start_game(gamefiles[index], backgroundqueue))
+                    self.status_label.set_text(f"{gamefiles[index]} now running")
 
+                game_button = gui.Button(f'Run {game}', width='31%', height='50px', margin='1%',
+                                         style={'font-size': '20px', 'text-align': 'center', 'background': '#606060'})
+                game_button.onclick.do(start_game_callback)
+                container_games.append(game_button)
 
-            #self.image_widget = PILImageViewverWidget(width=width, height=height)
-            self.image_widget = PILImageViewverWidget(width=width)
-            self.image_widget.load(file_path_name=os.path.join(path2,"logo.jpg"))
+            for label, handler in [
+                ("Close all", self.on_close_all),
+                ("Stop Server", self.on_stop_server),
+                ("System Shutdown", self.on_shutdown),
+                ("System Reset", self.on_reset),
+                ("System Reboot", self.on_reboot),
+                ("Check for Updates", self.on_check_updates),
+                ("Add Device to Local Network", self.on_add_device)
+            ]:
+                button = gui.Button(label, width='31%', height='50px', margin='1%',
+                                    style={'font-size': '20px', 'text-align': 'center', 'background': '#606060'})
+                button.onclick.do(handler)
+                container_settings.append(button)
 
-            for i in range(0,9):
-                def f(widget, i=i):
-                    hmsysteme.put_action(i+1)
-                    print("action button "+str(i+1)+" pressed")
-                name="no function"
-                action_button=gui.Button(name, width='31%', height='50px', margin='1%', style={'font-size': '20px', 'text-align': 'center'})
-                action_button.style["background"] = "#606060"
-                action_button.style["box-shadow"] = "none"
-                abt.append(action_button)
-                #container.append(action_button)
-                action_button.onclick.do(f)
-                action_button.set_enabled(False)
-            
-            for i in range(len(gamefiles)):
-                def f(widget,i=i):
-                    close_game(asdf, abt, backgroundqueue)
-                    asdf.append(start_game(gamefiles[i],backgroundqueue))
-                    self.lbl.set_text(gamefiles[i]+" now runnning")
-                    #print(asdf)
-                functions.append(f)       
-            
-            # setting the listener for the onclick event of the button
-            for i in range (len(gamefiles)):
-                bt[i].onclick.do(functions[i])
+            refresh_player_list()
 
+            tab_box.append(container_home, 'Home')
+            tab_box.append(container_players, 'Players')
+            tab_box.append(container_games, 'Games')
+            tab_box.append(container_settings, 'Settings')
+            return tab_box
 
-            b1.onclick.do(self.on_button_pressed1)
-            b2.onclick.do(self.on_button_pressed2)
-            b3.onclick.do(self.on_button_pressed3)
-            b4.onclick.do(self.on_button_pressed4)
-            b5.onclick.do(self.on_button_pressed5)
-            b6.onclick.do(self.on_button_pressed6)
+        def on_close_all(self, widget):
+            close_game(game_processes, action_buttons, backgroundqueue)
+            self.status_label.set_text("No game running yet")
 
-
-            
-
-            # appending a widget to another, the first argument is a string key
-            container.append(self.lbl)
-
-            
-            for i in range (len(gamefiles)):
-                container3.append(bt[i])
-            container.append(self.image_widget)
-            #container.append(self.lbl_foto)
-            #container.append(self.lbl_count)
-
-            for i in range(0, len(abt)):
-                container.append(abt[i])
-
-
-            container4.append(b1)
-            container4.append(b2)
-            container4.append(b3)
-            container4.append(b4)
-            container4.append(b5)
-            container4.append(b6)
-
-
-
-
-            #fill container2 with player commands and active players
-            fill_grid_with_playernames()
-
-
-            #create label for temp
-            self.templbl= gui.Label('temp ', width='50%', height='35px',style={'font-size': '25px', 'text-align': 'left'})
-            self.templbl.style["color"]="white"
-            container4.append(self.templbl)
-
-            self.debuglbl= gui.Label('debugging ', width='50%', height='35px',style={'font-size': '25px', 'text-align': 'left'})
-            self.debuglbl.style["color"]="white"
-            container4.append(self.debuglbl)
-            #container2.append(container_players_added)
-
-            tb.append(container,'Home')
-            tb.append(container2,'Players')
-            tb.append(container3, 'Games')
-            tb.append(container4, 'Settings')
-            
-            
-            # returning the root widget
-            return tb
-            
-        def on_button_pressed1(self, widget):
-            global abt
-            close_game(asdf, abt, backgroundqueue)
-
-            self.lbl.set_text("no game running yet")
-            print("all closed")    
-            
-        def on_button_pressed2(self, widget):           
-            self.server.server_starter_instance._alive=False
+        def on_stop_server(self, widget):
+            self.server.server_starter_instance._alive = False
             self.server.server_starter_instance._sserver.shutdown()
-            print("server stopped")
-            
-        def on_button_pressed3(self, widget):
-            self.dialog = gui.GenericDialog(width=350,title='Shutdown', message='Do you really want to shutdown the system')
-            self.dialog.confirm_dialog.do(self.sd_func)
-            self.dialog.show(self)
-            
-        def on_button_pressed4(self, widget):           
-            self.reset_func(self)
 
-        def on_button_pressed5(self, widget):
-            self.dialog = gui.GenericDialog(width=350,title='Reboot', message='Do you really want to reboot the system')
-            self.dialog.confirm_dialog.do(self.rb_func)
-            self.dialog.show(self)
+        def on_shutdown(self, widget):
+            dialog = gui.GenericDialog(width=350, title='Shutdown',
+                                       message='Do you really want to shutdown the system?')
+            dialog.confirm_dialog.do(lambda w: subprocess.run(["sudo", "poweroff"]))
+            dialog.show(self)
 
-        def on_button_pressed6(self, widget):
+        def on_reset(self, widget):
+            pass  # To be implemented
+
+        def on_reboot(self, widget):
+            dialog = gui.GenericDialog(width=350, title='Reboot', message='Do you really want to reboot the system?')
+            dialog.confirm_dialog.do(lambda w: subprocess.run(["sudo", "reboot"]))
+            dialog.show(self)
+
+        def on_check_updates(self, widget):
             if CheckForUpdates():
-                self.dialog = gui.GenericDialog(width=350, title='Update available',
-                                                message='Do you really want to update? The System will be restarted!')
-                self.dialog.confirm_dialog.do(self.up_func)
-                self.dialog.show(self)
+                dialog = gui.GenericDialog(width=350, title='Update Available', message='Do you want to update now?')
+                dialog.confirm_dialog.do(lambda w: UpdateSystem())
             else:
-                self.dialog = gui.GenericDialog(width=350, title='No Update available',
-                                                message='No update available')
-                self.dialog.show(self)
+                dialog = gui.GenericDialog(width=350, title='No Updates', message='No update available')
+            dialog.show(self)
 
+        def on_add_device(self, widget):
+            networks = self.scan_wifi()
+            dialog = gui.GenericDialog(width=350, title='Available Networks', message='Select and connect to a network')
+            list_view = gui.ListView.new_from_list(networks, width=300, height=120, margin='10px')
+            password_input = gui.TextInput(width='30%', height='35px', style={'font-size': '20px'})
+            dialog.append(password_input)
+            dialog.append(list_view)
+            dialog.confirm_dialog.do(lambda w: self.connect_to_wifi(list_view.get_value(), password_input.get_text()))
+            dialog.show(self)
 
+        def scan_wifi(self):
+            result = subprocess.run(["nmcli", "-t", "-f", "SSID", "dev", "wifi"], capture_output=True, text=True)
+            return [line for line in result.stdout.strip().split("\n") if line]
 
+        def connect_to_wifi(self, ssid, password):
+            if ssid:
+                subprocess.run(["nmcli", "dev", "wifi", "connect", ssid, "password", password])
 
-
-
-        # def on_button_clear_names(self, widget):
-        #     print("Player names cleared")
-        #     hmsysteme.clear_playernames()
-
-        def sd_func(self, widget):		
-            import os
-            print("system shutdown")
-            os.system("sudo poweroff")
-
-        def rb_func(self, widget):
-            import os
-            print("system reboot")
-            os.system("sudo reboot")
-
-
-        def up_func(self,widget):
-            UpdateSystem()
-
-
-
-
-
-
-
-
-    # starts the web server
     if debug_flag:
-        start(HMInterface,start_browser=False)
+        start(HMInterface, start_browser=False)
     else:
-        start(HMInterface, address='0.0.0.0', port=8081, multiple_instance=False, enable_file_cache=True, update_interval=0.1, start_browser=False)
-    
+        start(HMInterface, address='0.0.0.0', port=8081, multiple_instance=False, enable_file_cache=True,
+              update_interval=0.1, start_browser=False)
