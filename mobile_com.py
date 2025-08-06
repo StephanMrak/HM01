@@ -66,6 +66,18 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
         'box-shadow': '0 4px 6px rgba(0,0,0,0.1)'
     }
 
+    button_small_style = {
+        'font-size': '18px',
+        'text-align': 'center',
+        'background': '#3a3a3a',
+        'color': '#ffffff',
+        'border': 'none',
+        'border-radius': '8px',
+        'margin': '10px',
+        'padding': '2px 2px',
+        'box-shadow': '0 4px 6px rgba(0,0,0,0.1)'
+    }
+
     label_style = {
         'font-size': '20px',
         'color': '#ffffff',
@@ -82,7 +94,6 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
         'padding': '4px',
         'line-height': '35px',
         'vertical-align': 'middle'
-
     }
 
     dialog_style = {
@@ -102,6 +113,59 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
         'border-radius': '10px',
         'border': 'none',
         'font-family': 'Segoe UI, Roboto, sans-serif'
+    }
+
+    grid_style = {
+        'text-align': 'left',
+        'font-size': '18px',
+        'color': '#fff',
+        'padding': '4px',
+        'line-height': '35px',
+        'vertical-align': 'middle'
+    }
+    checkbox_style = {
+        'width': '50px',
+        'height': '50px',
+        'margin': '1%',
+        'display': 'flex',
+        'align-items': 'center',
+        'justify-content': 'center',
+        'background-color': '#2c2c2c',
+        'border-radius': '8px'
+    }
+
+
+    tab_active_style = {
+        'width': '20%',
+        'height': '35px',
+        'background': '#444',
+        'color': '#fff',
+        'padding': '2px 2px',
+        'border': '1px solid #666',
+        'border-radius': '10px',
+        'margin-right': '4px',
+        'font-size': '16px',
+        'cursor': 'pointer',
+        'line-height': '35px',
+        'font-weight': 'bold',
+        'vertical-align': 'middle'
+
+    }
+
+    tab_inactive_style = {
+        'width': '20%',
+        'height': '35px',
+        'background': '#3a3a3a',
+        'color': '#fff',
+        'padding': '2px 2px',
+        'border': '1px solid #666',
+        'border-radius': '10px',
+        'margin-right': '4px',
+        'font-size': '16px',
+        'cursor': 'pointer',
+        'line-height': '35px',
+        'font-weight': 'normal',
+        'vertical-align': 'middle'
     }
 
 
@@ -162,10 +226,10 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
         grid.define_grid(layout)
 
         for i, (player_name, is_active) in enumerate(player_list):
-            checkbox = gui.CheckBox(is_active, width='50px', height='50px', margin='1%', style=label_style.copy())
-            label = gui.Label(player_name, width='300px', height='50px', margin='1%', style=label_style.copy())
-            delete_button = gui.Button('DELETE', width='130px', height='50px', margin='1%',
-                                       style={**button_style.copy(), 'background': 'red'})
+            checkbox = gui.CheckBox(is_active, width='35px', height='35px', margin='1%', style=checkbox_style.copy())
+            label = gui.Label(player_name, width='300px', height='35px', margin='1%', style=grid_style.copy())
+            delete_button = gui.Button('DELETE', width='130px', height='35px', margin='1%',
+                                       style={**button_small_style.copy(), 'background': 'red'})
 
             def toggle_active(widget, new_value, index=i):
                 player_list[index][1] = new_value
@@ -181,6 +245,23 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             grid.append({f'delete{i}': delete_button, f'check{i}': checkbox, f'label{i}': label})
 
         container_players.append(grid)
+
+    class HMDialog(gui.GenericDialog):
+        def __init__(self,*args,**kwargs):
+            super().__init__(*args,**kwargs)
+        def apply_style(self):
+            self.style.update(dialog_style.copy())
+            for key, child in self.children.items():
+                if isinstance(child, gui.Container):
+                    child.style.update(default_style.copy())  # or dialog_style if you prefer
+                    for subchild in child.children.values():
+                        if isinstance(subchild, gui.Widget):
+                            subchild.style.update(default_style.copy())
+                else:
+                    child.style.update(default_style.copy())
+            self.conf.style.update(button_small_style.copy())
+            self.cancel.style.update(button_small_style.copy())
+            self.container.style.update(default_style.copy())
 
     class HMInterface(App):
         def __init__(self, *args):
@@ -236,9 +317,7 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
 
             for label, handler in [
                 ("Close all", self.on_close_all),
-                ("Stop Server", self.on_stop_server),
                 ("System Shutdown", self.on_shutdown),
-                ("System Reset", self.on_reset),
                 ("System Reboot", self.on_reboot),
                 ("Check for Updates", self.on_check_updates),
                 ("Add Device to Local Network", self.on_add_device)
@@ -253,6 +332,11 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             tab_box.append(container_players, 'Players')
             tab_box.append(container_games, 'Games')
             tab_box.append(container_settings, 'Settings')
+
+            self.update_tab_styles(tab_box,'Home')
+            tab_box.on_tab_selection.do(lambda widget, tab_name: self.update_tab_styles(widget,tab_name))
+
+
             return tab_box
 
         def on_close_all(self, widget):
@@ -264,8 +348,8 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             self.server.server_starter_instance._sserver.shutdown()
 
         def on_shutdown(self, widget):
-            dialog = gui.GenericDialog(width=350, title='Shutdown', message='Do you really want to shutdown the system?')
-            dialog.style.update(dialog_style.copy())
+            dialog = HMDialog(width=350, title='Shutdown', message='Do you really want to shutdown the system?')
+            dialog.apply_style()
             dialog.confirm_dialog.do(lambda w: subprocess.run(["sudo", "poweroff"]))
             dialog.show(self)
 
@@ -273,31 +357,40 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             pass
 
         def on_reboot(self, widget):
-            dialog = gui.GenericDialog(width=350, title='Reboot', message='Do you really want to reboot the system?')
-            dialog.style.update(dialog_style.copy())
+            dialog = HMDialog(width=350, title='Reboot', message='Do you really want to reboot the system?')
+            dialog.apply_style()
             dialog.confirm_dialog.do(lambda w: subprocess.run(["sudo", "reboot"]))
             dialog.show(self)
 
         def on_check_updates(self, widget):
             if CheckForUpdates():
-                dialog = gui.GenericDialog(width=350, title='Update Available', message='Do you want to update now?')
-                dialog.style.update(dialog_style.copy())
+                dialog = HMDialog(width=350, title='Update Available', message='Do you want to update now?')
+                dialog.style.update(default_style.copy())
                 dialog.confirm_dialog.do(lambda w: UpdateSystem())
             else:
-                dialog = gui.GenericDialog(width=350, title='No Updates', message='No update available')
-                dialog.style.update(dialog_style.copy())
+                dialog = HMDialog(width=350, title='No Updates', message='No update available')
+                dialog.style.update(default_style.copy())
+            dialog.apply_style()
             dialog.show(self)
 
-        def adddevicecallback(self, widget, key):
-            for _,value in widget.children.items():
-                if key==_:
-                    value.style.update({**listview_style.copy(), 'border': '1px solid #666','border-radius': '8px'})
+        def adddevicecallback(self, widget, selectedkey):
+            for key,value in widget.children.items():
+                if selectedkey==key:
+                    value.style.update({**listview_style.copy(), 'background': '#444'})
                 else:
                     value.style.update(listview_style.copy())
 
+        def update_tab_styles(self, tab_box, selected_tab_name):
+            for tab_name, tab_button in tab_box.children['_container_tab_titles'].children.items():
+                if tab_name == selected_tab_name:
+                    tab_button.style.update(tab_active_style)
+                else:
+                    tab_button.style.update(tab_inactive_style)
+
+
         def on_add_device(self, widget):
             networks = self.scan_wifi()
-            dialog = gui.GenericDialog(width=350, title='Available Networks', message='Select and connect to a network')
+            dialog = HMDialog(width=350, title='Available Networks')
             dialog.style.update(default_style.copy())
 
             list_view = gui.ListView.new_from_list(networks, width=300, height=120, margin='10px')
@@ -305,24 +398,11 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             list_view.onselection.do(self.adddevicecallback)
             for key, value in list_view.children.items():
                 value.style.update(listview_style.copy())
+            password_input = gui.TextInput(width='50%', height='35px', style=input_style.copy())
 
-            password_input = gui.TextInput(width='30%', height='35px', style=input_style.copy())
-
-            dialog.add_field_with_label("psw_input","enter password",password_input)
             dialog.add_field_with_label("listview_ssids","select network to connect",list_view)
-            for key, child in dialog.children.items():
-                if isinstance(child, gui.Container):
-                    child.style.update(default_style.copy())  # or dialog_style if you prefer
-                    for subchild in child.children.values():
-                        if isinstance(subchild, gui.Widget):
-                            subchild.style.update(default_style.copy())
-                else:
-                    child.style.update(default_style.copy())
-            dialog.conf.style.update(button_style.copy())
-            dialog.cancel.style.update(button_style.copy())
-            dialog.container.style.update(default_style.copy())
-
-
+            dialog.add_field_with_label("psw_input", "enter password", password_input)
+            dialog.apply_style()
             dialog.confirm_dialog.do(lambda w: self.connect_to_wifi(list_view.get_value(), password_input.get_text()))
             dialog.show(self)
 
