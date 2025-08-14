@@ -4,10 +4,26 @@ import hmsysteme
 from check_for_updates import CheckForUpdates, UpdateSystem
 import subprocess
 import WiFiHelper
+import startscreen
 
 WIDTH = '100%'
 HEIGHT = '1500px'
 action_buttons = []
+
+def show_connection_screen():
+    ssid, passw = configure_wifi_or_hotspot()
+    process = multiprocessing.Process(target=startscreen.startscreen, args=(ssid, passw))
+    process.start()
+    return process
+
+def close_connection_screen(processes):
+    for process in processes:
+        if process.is_alive():
+            time.sleep(0.5)
+            process.terminate()
+        if process in processes:
+            processes.remove(process)
+
 
 def start_game(gamefile, backgroundqueue):
     hmsysteme.open_game()
@@ -17,13 +33,15 @@ def start_game(gamefile, backgroundqueue):
     process.start()
     return process
 
-def close_game(game_processes, buttons, backgroundqueue):
-    for process in game_processes:
+def close_game(processes, buttons, backgroundqueue):
+    for process in processes:
         if process.is_alive():
             hmsysteme.close_game()
             hmsysteme.put_button_names(False)
             time.sleep(0.5)
             process.terminate()
+        if process in processes:
+            processes.remove(process)
     for button in buttons:
         try:
             button.set_text("no function")
@@ -34,6 +52,69 @@ def close_game(game_processes, buttons, backgroundqueue):
 def is_name_unique(name, players):
     return all(player[0] != name for player in players)
 
+_wifi_helper = None
+
+def get_wifi_helper():
+    global _wifi_helper
+    if _wifi_helper is None:
+        _wifi_helper = WiFiHelper.WiFiHelper()
+    return _wifi_helper
+
+def configure_wifi_or_hotspot():
+    # Initialize the WiFi helper
+    wifi = get_wifi_helper()
+    
+    # Check if setup has been completed
+    if not wifi._check_setup_complete():
+        print("WARNING: Setup not complete. Please run setup_wifi_helper.sh first!")
+        print("sudo bash setup_wifi_helper.sh $USER")
+        print("")
+    
+    # Check current mode
+    mode = wifi.get_current_mode()
+    print(f"Current mode: {mode}")
+    
+    # Check internet connection
+    ssid = None
+    passw = None
+    encryption = None
+    if wifi.check_internet_connection():
+        print("Internet connection available")
+        ssid = wifi.get_current_ssid()
+        pw = "Your Wifi Password"
+        if ssid:
+            print(f"Connected to: {ssid}")
+            creds = wifi.get_current_network_credentials()
+            if creds:
+                ssid = creds["ssid"]
+                passw = creds["password"]
+                encryption = creds["encryption"]
+    else:
+        print("No internet connection")
+        # Create a hotspot if not already in hotspot mode
+        if mode != "hotspot":
+            print("\nCreating hotspot...")
+            ssid_attempt = "ShootingRange"
+            pw_attempt = "123456"
+            success = wifi.create_hotspot(
+                ssid=ssid_attempt,
+                password=pw_attempt,
+                country="DE",  # Change to your country code
+                channel=7,
+                enable_nat=True
+            )
+            
+            if success:
+                # TODO: is it really WPA?
+                ssid = ssid_attempt
+                passw = pw_attempt
+                encryption = "WPA"
+                print("Hotspot created successfully!")
+                print("Connect to WiFi: ShootingRange")
+                print("Password: 123456")
+                print("Then access: http://192.168.4.1")
+    return ssid, passw
+
 def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
     import os
     import io
@@ -42,7 +123,9 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
     from remi import start, App
 
     path = hmsysteme.get_path()
-    game_processes = []
+    game_process = []
+    startscreen_process = []
+    startscreen_process.append(show_connection_screen())
     backgroundqueue.put("open")
 
     default_style = {
@@ -264,12 +347,6 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             self.cancel.style.update(button_small_style.copy())
             self.container.style.update(default_style.copy())
 
-    def get_wifi_helper():
-        global _wifi_helper
-        if _wifi_helper is None:
-            _wifi_helper = WifiHelper()
-        return _wifi_helper
-
     class HMInterface(App):
         def __init__(self, *args):
             super().__init__(*args)
@@ -314,8 +391,9 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
 
             for i, game in enumerate(gamefiles):
                 def start_game_callback(widget, index=i):
-                    close_game(game_processes, action_buttons, backgroundqueue)
-                    game_processes.append(start_game(gamefiles[index], backgroundqueue))
+                    close_connection_screen(startscreen_process)
+                    close_game(game_process, action_buttons, backgroundqueue)
+                    game_process.append(start_game(gamefiles[index], backgroundqueue))
                     self.status_label.set_text(f"{gamefiles[index]} now running")
 
                 game_button = gui.Button(f'Run {game}', width='31%', height='50px', style=button_style.copy())
@@ -347,7 +425,8 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             return tab_box
 
         def on_close_all(self, widget):
-            close_game(game_processes, action_buttons, backgroundqueue)
+            close_game(game_process, action_buttons, backgroundqueue)
+            startscreen_process.append(show_connection_screen())
             self.status_label.set_text("No game running yet")
 
         def on_stop_server(self, widget):
