@@ -59,7 +59,7 @@ def main():
     if hmsysteme.get_debug()==True:
         screen = pygame.display.set_mode(size)
     else:
-        screen=pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        screen=pygame.display.set_mode((1366, 762), pygame.FULLSCREEN)
     clock = pygame.time.Clock()
     pygame.display.set_caption("Competition")
 
@@ -497,7 +497,7 @@ def main():
                         wall_life = wall_life - 1
                 # walking
                 elif self.walking:
-                    self.speed = 0.5
+                    self.speed = 1
                     self.rect.x += self.speed
                     self.image = self.images[self.counter]
                     self.counter += 1
@@ -505,7 +505,7 @@ def main():
                         self.counter = 0
                 # running
                 else:
-                    self.speed = 1
+                    self.speed = 2
                     self.rect.x += self.speed
                     self.image = self.images[self.counter + 19]
                     self.counter += 1
@@ -581,9 +581,6 @@ def main():
                 fps_samples = []
                 frame_count = 0
 
-        # No need to draw background - animations are cleared from it below
-        # screen.blit(static_background, (0, 0))
-        
         # Draw wall if game not lost
         if not game_lost:
             screen.blit(wall_fence, (1000, 200))
@@ -617,6 +614,18 @@ def main():
         else:
             text = GAME_FONT.render(str(wall_life), True, (255, 0, 0))
 
+        # Clear UI text areas before drawing new text
+        ui_clear_rects = [
+            pygame.Rect(1000, 150, 200, 60),  # Wall life text area
+            pygame.Rect(200, 150, 200, 60),   # Points text area
+        ]
+        
+        if debug_fps and frame_count == 1:  # Only clear FPS area when updating
+            ui_clear_rects.append(pygame.Rect(50, 50, 150, 60))  # FPS text area
+        
+        for rect in ui_clear_rects:
+            screen.blit(static_background, rect.topleft, rect)
+
         # Draw UI text
         screen.blit(text, (1000, 150))
         
@@ -624,11 +633,7 @@ def main():
         screen.blit(points_text, (200, 150))
 
         # Display FPS if in debug mode
-        if debug_fps and (frame_count == 0):
-            # Clear the FPS area first (restore background)
-            fps_rect = pygame.Rect(50, 50, 150, 60)  # Adjust size as needed
-            screen.blit(static_background, (50, 50), fps_rect)
-            
+        if debug_fps and (frame_count == 1):
             fps_text = GAME_FONT.render(f"FPS: {mean_fps_display:.1f}", True, (255, 255, 0))
             screen.blit(fps_text, (50, 50))
 
