@@ -3,6 +3,7 @@ import time
 import hmsysteme
 from check_for_updates import CheckForUpdates, UpdateSystem
 import subprocess
+import WiFiHelper
 
 WIDTH = '100%'
 HEIGHT = '1500px'
@@ -263,6 +264,12 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             self.cancel.style.update(button_small_style.copy())
             self.container.style.update(default_style.copy())
 
+    def get_wifi_helper():
+        global _wifi_helper
+        if _wifi_helper is None:
+            _wifi_helper = WifiHelper()
+        return _wifi_helper
+
     class HMInterface(App):
         def __init__(self, *args):
             super().__init__(*args)
@@ -407,12 +414,11 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             dialog.show(self)
 
         def scan_wifi(self):
-            result = subprocess.run(["nmcli", "-t", "-f", "SSID", "dev", "wifi"], capture_output=True, text=True)
-            return [line for line in result.stdout.strip().split("\n") if line]
+            return get_wifi_helper().scan_for_ssids()
 
         def connect_to_wifi(self, ssid, password):
             if ssid:
-                subprocess.run(["nmcli", "dev", "wifi", "connect", ssid, "password", password])
+                get_wifi_helper().connect_to_network(ssid, password)
 
 
 
