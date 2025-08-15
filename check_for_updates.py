@@ -1,5 +1,4 @@
 import requests
-import argparse
 import tarfile
 import zipfile
 from packaging import version
@@ -10,6 +9,23 @@ import shutil
 import multiprocessing
 import subprocess
 
+
+def copy_and_replace(src_folder, dst_folder):
+    # Falls Zielordner nicht existiert → erstellen
+    os.makedirs(dst_folder, exist_ok=True)
+
+    for root, dirs, files in os.walk(src_folder):
+        # Zielpfad entsprechend der Ordnerstruktur berechnen
+        rel_path = os.path.relpath(root, src_folder)
+        target_dir = os.path.join(dst_folder, rel_path)
+        os.makedirs(target_dir, exist_ok=True)
+
+        # Dateien kopieren (überschreiben, falls vorhanden)
+        for file_name in files:
+            src_file = os.path.join(root, file_name)
+            dst_file = os.path.join(target_dir, file_name)
+            shutil.copy2(src_file, dst_file)  # copy2 behält Datum/Zeit bei
+            print(f"Kopiert: {src_file} -> {dst_file}")
 
 def get_download_url(release_info, asset_index=0):
     """Ermittelt Download-URL aus Release-Informationen"""
@@ -141,7 +157,7 @@ def CheckForUpdates():
             print(e)
             return
         if is_update_available(local_version, latest_version["tag_name"]):
-            print(f"Update verfügbar! Lokal: {local_version}  Neueste: {latest_version.get(tag_name)}")
+            print(f"Update verfügbar! Lokal: {local_version}  Neueste: {latest_version.get("tag_name")}")
             return True
         else:
             return False
@@ -181,9 +197,7 @@ def UpdateSystem():
             #apply new version
             HM_source=os.listdir(home_directory+"/Downloads/HM01-source")[0]
             dest=home_directory+"/Downloads/HM01"
-            if os.path.exists(dest):
-                shutil.rmtree(dest)
-            shutil.copytree(home_directory+"/Downloads/HM01-source/"+HM_source,home_directory+"/Downloads/HM01")
+            copy_and_replace(home_directory+"/Downloads/HM01-source/"+HM_source,dest)
             print(f"Updated to new version")
             subprocess.call("pip install hmsysteme", shell=True)
             print(f"Also updated hmsysteme package to newest version")
