@@ -471,7 +471,7 @@ def main():
     signal.signal(signal.SIGTERM, cleanup)
 
     # Start the processes (non-blocking)
-    result = start(args.p, args.r, args.d, args.f, args.t, args.m, return_queues=False)
+    result = start(args.p, args.r, args.d, args.f, args.t, args.m)
     if result is None:
         sys.exit(1)
         
