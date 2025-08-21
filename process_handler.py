@@ -28,16 +28,8 @@ def main():
         if game.endswith(".py"):
             gamefiles.append(game.replace('.py', ''))
 
-
     backgroundqueue = multiprocessing.Queue(maxsize=1)
 
-
-    #t2 = multiprocessing.Process(target=hardware_com_micro.hardware_com_micro,
-    #                             args=("Hardware_com_micro",args.debug))
-    #t2.start()
-    #print("hardware_com_micro process started")
-
-    time.sleep(1)
     t4 = multiprocessing.Process(target=mobile_com.mobile_com,
                                  args=("Mobile_com", path, gamefiles, backgroundqueue, args.debug))
     t4.start()

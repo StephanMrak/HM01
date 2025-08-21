@@ -5,6 +5,7 @@ from check_for_updates import CheckForUpdates, UpdateSystem
 import subprocess
 import WiFiHelper
 import startscreen
+import hardware_com_micro
 
 WIDTH = '100%'
 HEIGHT = '1500px'
@@ -19,7 +20,6 @@ def show_connection_screen():
 def close_connection_screen(processes):
     for process in processes:
         if process.is_alive():
-            time.sleep(0.5)
             process.terminate()
         if process in processes:
             processes.remove(process)
@@ -27,18 +27,19 @@ def close_connection_screen(processes):
 
 def start_game(gamefile, backgroundqueue):
     hmsysteme.open_game()
-    time.sleep(0.5)
     game_module = __import__(gamefile)
-    process = multiprocessing.Process(target=game_module.main)
-    process.start()
-    return process
+    game_process = multiprocessing.Process(target=game_module.main)
+    game_process.start()
+    #starting hw com will reset the receiver board
+    receiver, processor, plotter = hardware_com_micro.start(plot=False, process=True, debug=False, filename="", threshold=135, mode=1)
+    return [game_process, receiver, processor]
 
 def close_game(processes, buttons, backgroundqueue):
     for process in processes:
         if process.is_alive():
             hmsysteme.close_game()
             hmsysteme.put_button_names(False)
-            time.sleep(0.5)
+            time.sleep(0.1)
             process.terminate()
         if process in processes:
             processes.remove(process)
@@ -393,7 +394,7 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
                 def start_game_callback(widget, index=i):
                     close_connection_screen(startscreen_process)
                     close_game(game_process, action_buttons, backgroundqueue)
-                    game_process.append(start_game(gamefiles[index], backgroundqueue))
+                    game_process.extend(start_game(gamefiles[index], backgroundqueue))
                     self.status_label.set_text(f"{gamefiles[index]} now running")
 
                 game_button = gui.Button(f'Run {game}', width='31%', height='50px', style=button_style.copy())
