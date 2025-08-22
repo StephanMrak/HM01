@@ -438,9 +438,6 @@ def main():
             screen.blit(txtActivePlayer, (60, 100))
             # Player Score
             for i in range(0, len(names)):
-                print(i)
-                print(Players[i])
-                print(Players[i].name)
                 txtPlayerNames = GAME_FONT.render(str(Players[i].name) + ":", True, (240, 255, 240))
                 pygame.draw.line(screen, (255, 255, 255), [1050, iVerticalName + 45], [1300, iVerticalName + 45], 1)
                 txtPlayerScore = GAME_FONT.render(str(Players[i].score_10mRifle[itmpGlobalRounds]), True, (240, 255, 240))
