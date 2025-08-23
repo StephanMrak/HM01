@@ -1,46 +1,59 @@
 import signal
 import sys
-import numpy as np
 import multiprocessing
 import time
 import argparse
-from queue import Empty as QueueEmpty
-from concurrent.futures import ThreadPoolExecutor
 import os
-from datetime import timedelta, datetime
-import copy
-import re
-from positioning import PositionEstimator
 import hmsysteme
 
-# Constants
+# Only keep essential constants in parent process
 SPI_DEVICE = "/dev/spidev0.0"
 GPIO_CHIP = "/dev/gpiochip0"
 GPIO_LINE_DATA_RDY = 17
 GPIO_LINE_NRST = 4
 SPI_SPEED = 10000000 
 BITS_PER_WORD = 8 
-DATA_SIZE = 5980  # samples
+DATA_SIZE = 5980
 SPI_MODE = 0
 FREQUENCY = 500000 
 REF_VOLTAGE = 3.3
-FACTOR = REF_VOLTAGE / np.power(2, BITS_PER_WORD)
 
-if sys.platform.startswith("linux"):
-    import spidev
-    import gpiod
-
-    class ReceiverProcess(multiprocessing.Process):
-        def __init__(self, plot_queue, data_queue, plot, process, threshold, mode):
+class ReceiverProcess(multiprocessing.Process):
+        def __init__(self, plot_queue, plot, threshold, mode, debug):
             super().__init__()
             self.plot_queue = plot_queue
-            self.data_queue = data_queue
             self.plot = plot
-            self.process = process
             self.threshold = threshold
             self.mode = mode
+            self.debug = debug
             self.spi = None
             self.gpio_request = None
+            
+            # Import heavy libraries in __init__ to avoid import overhead during processing
+            import numpy as np
+            from positioning import PositionEstimator
+            from datetime import timedelta, datetime
+            import re
+            
+            # Store imported modules as instance variables for fast access
+            self.np = np
+            self.datetime = datetime
+            self.re = re
+            
+            # Calculate factor once
+            self.FACTOR = REF_VOLTAGE / np.power(2, BITS_PER_WORD)
+            
+            # Create PositionEstimator in __init__ for faster access
+            self.positionEstimator = PositionEstimator(.370, .215, mode)
+            
+            # Statistics tracking
+            self.sumAbsErrorX = 0
+            self.sumAbsErrorY = 0
+            self.sumErrorX = 0
+            self.sumErrorY = 0
+            self.maxErrorX = -1
+            self.maxErrorY = -1
+            self.count = 0
 
         def terminate(self):
             """Override terminate to clean up resources before termination."""
@@ -54,7 +67,68 @@ if sys.platform.startswith("linux"):
             # Call parent terminate
             super().terminate()
 
+        def process_data_immediately(self, ch1, ch2, ch3, ch4, extras=None):
+            """Process data immediately after receiving it - optimized for speed"""
+            try:
+                # All imports are already done in __init__, use instance variables for speed
+                # Process the data to get position estimate
+                isValid, positionEstimate, minNormRes = self.positionEstimator.estimatePosition((ch1, ch2, ch3, ch4, FREQUENCY))
+                
+                if isValid:
+                    d_lenght = 0.341
+                    factor = 0.97
+                    pixelw = hmsysteme.get_size()[0] / d_lenght * factor
+                    pos=[int((positionEstimate[0]-0.01)*pixelw),int((positionEstimate[1]-0.0125)*pixelw)] 
+                    hmsysteme.put_pos(pos)
+                    #time.sleep(.5)
+                    hmsysteme.put_hit()
+                    print(f"Hit detected at position: x {float(positionEstimate[0]):.3f}, y: {float(positionEstimate[1]):.3f}, residual: {float(minNormRes):.6f}")
+                    
+                    # Handle debug statistics if extras data is provided
+                    if extras:
+                        xTrue, yTrue = extras
+                        errorX = positionEstimate[0] - xTrue
+                        errorY = positionEstimate[1] - yTrue
+                        
+                        if abs(errorX) > self.maxErrorX:
+                            self.maxErrorX = abs(errorX)
+                        if abs(errorY) > self.maxErrorY:
+                            self.maxErrorY = abs(errorY)
+                        
+                        self.sumErrorX += errorX
+                        self.sumErrorY += errorY
+                        self.sumAbsErrorX += abs(errorX)
+                        self.sumAbsErrorY += abs(errorY)
+                        self.count += 1
+                        
+                        print(f"Mean error x: {float(self.sumErrorX/self.count):.3f}, y: {float(self.sumErrorY/self.count):.3f}")
+                        print(f"Mean abs error x: {float(self.sumAbsErrorX/self.count):.3f}, y: {float(self.sumAbsErrorY/self.count):.3f}")
+                        print(f"Position error: x {float(errorX):.3f}, y {float(errorY):.3f}")
+                        print(f"Max error: x {float(self.maxErrorX):.3f}, y {float(self.maxErrorY):.3f}")
+                else:
+                    print("No valid position estimate")
+                    
+                # Save debug data if enabled
+                if self.debug:
+                    os.makedirs("debug_data", exist_ok=True)
+                    timestamp = self.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                    filename = f"debug_data/shot_{timestamp}.npy"
+                    self.np.save(filename, self.np.array([(ch1, ch2, ch3, ch4)], dtype=self.np.float32))
+                    print(f"Saved shot data to disk: {filename}")
+                    
+            except Exception as e:
+                print(f"Error processing data: {e}")
+
         def run(self):
+            # Import only SPI-specific libraries in run()
+            if sys.platform.startswith("linux"):
+                import spidev
+                import gpiod
+                from datetime import timedelta
+            else:
+                print("Running in non-Linux environment. Exiting receiver_process.")
+                return
+            
             try:
                 self.spi = spidev.SpiDev()
                 self.spi.open(0, 0)
@@ -101,36 +175,24 @@ if sys.platform.startswith("linux"):
                                 if event.event_type == gpiod.EdgeEvent.Type.RISING_EDGE:
                                     rx_buffer = self.spi.xfer3(tx_buf)
                                     print(f"Received data from SPI {recCounter}")
-                                    receivedData = np.array(rx_buffer, dtype=np.uint8).astype(np.int16)
+                                    receivedData = self.np.array(rx_buffer, dtype=self.np.uint8).astype(self.np.int16)
                                     
-                                    if(np.any(receivedData[0:3] == 0) or (np.max(receivedData) == 0)):
-                                        print("Received invalid zero data")
-                                    else:
-                                        ch1 = (receivedData[4::4] - receivedData[0])*FACTOR
-                                        ch2 = (receivedData[5::4] - receivedData[1])*FACTOR
-                                        ch3 = (receivedData[6::4] - receivedData[2])*FACTOR
-                                        ch4 = (receivedData[7::4] - receivedData[3])*FACTOR
+                                    if not (self.np.any(receivedData[0:3] == 0) or (self.np.max(receivedData) == 0)):
+                                        ch1 = (receivedData[4::4] - receivedData[0]) * self.FACTOR
+                                        ch2 = (receivedData[5::4] - receivedData[1]) * self.FACTOR
+                                        ch3 = (receivedData[6::4] - receivedData[2]) * self.FACTOR
+                                        ch4 = (receivedData[7::4] - receivedData[3]) * self.FACTOR
                                         
-                                        # Only add to the processing queue if the process flag is set
-                                        if self.process:
-                                            self.data_queue.put({
-                                                'ch1': ch1,
-                                                'ch2': ch2,
-                                                'ch3': ch3,
-                                                'ch4': ch4,
-                                                'extras': None 
-                                            })
+                                        # Process data immediately
+                                        self.process_data_immediately(ch1, ch2, ch3, ch4)
                                         
+                                        # Add to plot queue if plotting is enabled
                                         if self.plot:
                                             self.plot_queue.put((recCounter, ch1, ch2, ch3, ch4))
-                                    recCounter += 1
+                                    else:
+                                        print("Received invalid zero data")
                                     
-                                    # Check periodically if we should exit
-                                    try:
-                                        # This will raise an exception if the process is terminated
-                                        pass
-                                    except:
-                                        break
+                                    recCounter += 1
             except Exception as e:
                 print(f"Error in receiver_process: {e}")
             finally:
@@ -141,157 +203,17 @@ if sys.platform.startswith("linux"):
                     pass
                 print("Receiver exiting...")
 
-else:
-    class ReceiverProcess(multiprocessing.Process):
-        def __init__(self, plot_queue, data_queue, plot, process, threshold, mode):
-            super().__init__()
-            
-        def terminate(self):
-            """Override terminate for cleanup (no resources to clean in non-Linux)."""
-            super().terminate()
-            
-        def run(self):
-            print("Running in non-Linux environment. Exiting receiver_process.")
-            return
-
-class DataProcessingProcess(multiprocessing.Process):
-    def __init__(self, data_queue, debug, process, positionEstimator):
+class NonLinuxReceiverProcess(multiprocessing.Process):
+    def __init__(self, plot_queue, plot, threshold, mode, debug):
         super().__init__()
-        self.data_queue = data_queue
-        self.debug = debug
-        self.process = process
-        self.positionEstimator = positionEstimator
-        self.executor = None
-
+        
     def terminate(self):
-        """Override terminate to clean up thread pool."""
-        try:
-            if self.executor:
-                self.executor.shutdown(wait=False)
-                print("Thread pool shut down during termination")
-        except Exception as e:
-            print(f"Error shutting down thread pool: {e}")
-        
+        """Override terminate for cleanup (no resources to clean in non-Linux)."""
         super().terminate()
-
-    def run(self):
-        if not self.process:
-            print("Processing disabled. Exiting data_processing.")
-            return
-
-        batch_data = []  # Stores raw data for the batch
-        batch_results = []  # Stores results from process_data for the batch
-        batch_duration = 0.1  # 100ms in seconds
-        batch_counter = 0
-        batch_start_time = None
-        processing_tasks = []  # Track processing tasks for the current batch
-        sumAbsErrorX, sumErrorX = 0, 0
-        sumAbsErrorY, sumErrorY = 0, 0
-        maxErrorX, maxErrorY = -1, -1
-        count = 0
-
-        def analyze_batch(batch_data, batch_results, batch_id, extras=None):
-            # Placeholder for batch analysis logic
-            print(f"Analyzing batch {batch_id}")
-            minRes = 1e6
-            minPos = [100, 100]
-            validResultContained = False
-            for result in batch_results:
-                isValid, positionEstimate, minNormRes = result
-                if(isValid and (minRes > minNormRes)):
-                    validResultContained = True
-                    minRes = minNormRes
-                    minPos = positionEstimate
-                    print(f"Candidate position estimate: {positionEstimate}")    
-                    print(f"Candidate normRes: {minNormRes}")
-            if validResultContained:
-                hmsysteme.hit_detected()
-                hmsysteme.put_pos([minPos[0], minPos[1]])
-                print(f"Resulting position estimate:x {minPos[0]}, y: {minPos[1]} ")
-            else:
-                print("No valid position estimate")
-
-            if extras:
-                nonlocal sumAbsErrorX, sumAbsErrorY, sumErrorX, sumErrorY, maxErrorX, maxErrorY, count
-                xTrue = extras[0]
-                yTrue = extras[1]
-                errorX = minPos[0] - xTrue
-                errorY = minPos[1] - yTrue
-                if abs(errorX) > maxErrorX:
-                    maxErrorX = abs(errorX)
-                if abs(errorY) > maxErrorY:
-                    maxErrorY = abs(errorY)
-                sumErrorX += errorX
-                sumErrorY += errorY
-                sumAbsErrorX += abs(errorX)
-                sumAbsErrorY += abs(errorY)
-                count += 1
-                print(f"Mean error x: {sumErrorX/count}, y: {sumErrorY/count}")
-                print(f"Mean abs error x: {sumAbsErrorX/count}, y: {sumAbsErrorY/count}")
-                print(f"Position error: x {errorX}, y {errorY}")
-                print(f"Max error: x {maxErrorX}, y {maxErrorY}")
-
-            if self.debug:
-                # Ensure the directory exists
-                os.makedirs("debug_data", exist_ok=True)
-                # Add a timestamp to the filename
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"debug_data/batch_{batch_id}_{timestamp}.npy"
-                np.save(filename, np.array(batch_data, dtype=np.int16))
-                print(f"Saved batch {batch_id} to disk: {filename}")
-
-        with ThreadPoolExecutor() as executor:
-            self.executor = executor
-            while True:
-                try:
-                    # Get data from the queue with a short timeout
-                    data = copy.deepcopy(self.data_queue.get(timeout=0.1))
-                    ch1 = data['ch1']
-                    ch2 = data['ch2']
-                    ch3 = data['ch3']
-                    ch4 = data['ch4']
-                    batch_data.append((ch1, ch2, ch3, ch4))
-
-                    # Start the batch timer if it's the first data in the batch
-                    if batch_start_time is None:
-                        batch_start_time = time.time()
-
-                    # Submit the processing task to the thread pool and store the future
-                    future = self.executor.submit(self.positionEstimator.estimatePosition, (ch1, ch2, ch3, ch4, FREQUENCY))
-                    processing_tasks.append(future)
-
-                except QueueEmpty:
-                    # No new data arrived, check if a batch is ongoing and if it's time to finalize it
-                    if batch_start_time is not None and (time.time() - batch_start_time >= batch_duration):
-                        # Wait for all processing tasks in the current batch to complete
-                        batch_results = [future.result() for future in processing_tasks]
-
-                        # Analyze the batch after all data has been processed
-                        if batch_data:  # Only analyze if we have data
-                            last_data = batch_data[-1] if hasattr(self, '_last_data_extras') else None
-                            analyze_batch(batch_data, batch_results, batch_counter, 
-                                        getattr(self, '_last_data_extras', None))
-                        
-                        batch_data = []  # Reset the batch data
-                        batch_results = []  # Reset the batch results
-                        processing_tasks = []  # Reset the processing tasks
-                        batch_counter += 1
-                        batch_start_time = None  # Reset the batch timer
-                except Exception as e:
-                    print(f"Error in data processing: {e}")
-                    continue
-
-        # Ensure any remaining data in the batch is processed and analyzed before exiting
-        if batch_data and processing_tasks:
-            # Wait for all processing tasks in the current batch to complete
-            batch_results = [future.result() for future in processing_tasks]
-            # Analyze the final batch
-            analyze_batch(batch_data, batch_results, batch_counter, 
-                        getattr(self, '_last_data_extras', None))
         
-        # Clean up executor reference
-        self.executor = None
-        print("Data Processing exiting...")
+    def run(self):
+        print("Running in non-Linux environment. Exiting receiver_process.")
+        return
 
 class PlotterProcess(multiprocessing.Process):
     def __init__(self, plot_queue, plot):
@@ -316,10 +238,11 @@ class PlotterProcess(multiprocessing.Process):
         if not self.plot:
             return
 
-        # Import matplotlib here to avoid issues with multiprocessing
+        # Import matplotlib here to avoid issues with multiprocessing and reduce parent memory
         import matplotlib
         matplotlib.use('TkAgg')
         import matplotlib.pyplot as plt
+        from queue import Empty as QueueEmpty
         
         plt.ion()  # Turn on interactive mode
         figures = []  # Store references to figures to keep them alive
@@ -361,51 +284,55 @@ class PlotterProcess(multiprocessing.Process):
 
         print("Plotter exiting...")
 
-def load_and_enqueue_data(npy_file, data_queue, plot_queue, plot):
+def load_and_enqueue_data(npy_file, receiver_process, plot_queue, plot):
+    """Load data from file and process it directly through the receiver"""
+    import numpy as np  # Import numpy only when needed
+    import re
+    
     pattern = r"x(\d+)_y(\d+)"
     match = re.search(pattern, npy_file)
-    offsetx = -0.015
-    offsety = -0.037
     offsetx = 0
     offsety = 0
-    xTrue = int(match.group(1))*0.001 + offsetx
-    yTrue = int(match.group(2))*0.001 + offsety
+    if match:
+        xTrue = int(match.group(1))*0.001 + offsetx
+        yTrue = int(match.group(2))*0.001 + offsety
+    else:
+        xTrue, yTrue = 0, 0
+        
     data = np.load(npy_file) 
     for item in data:
         ch1, ch2, ch3, ch4 = item
-        data_queue.put({
-                        'ch1': -ch1,
-                        'ch2': -ch2,
-                        'ch3': -ch3,
-                        'ch4': -ch4,
-                        'extras': (xTrue, yTrue)
-                    })
+        
+        # Process data directly
+        receiver_process.process_data_immediately(ch1, ch2, ch3, ch4, None if not match else (xTrue,yTrue))
+        
+        # Add to plot queue if plotting
         if plot: 
             plot_queue.put((0, ch1, ch2, ch3, ch4))
-    print("Data from npy file loaded into plot_queue.")
+            
+    print(f"Data from {npy_file} processed directly.")
 
 def start(plot=False, process=True, debug=False, filename="", threshold=200, mode=1):
     """
     Start the SPI data processing system non-blocking.
     
     Returns:
-        All processes implement multiprocessing.Process and can be terminated with .terminate()
+        Processes that can be terminated with .terminate()
     """
-    plot_queue = multiprocessing.Queue(maxsize=100)
-    data_queue = multiprocessing.Queue(maxsize=100)
-
-    positionEstimator = PositionEstimator(.370, .215, mode)
+    plot_queue = multiprocessing.Queue(maxsize=10) if plot else None  # Reduced from 100
 
     # Create process instances
     print(f"Starting sampleboard in mode: {mode} and threshold {threshold}")
     
-    receiver = ReceiverProcess(plot_queue, data_queue, plot, process, threshold, mode)
-    processor = DataProcessingProcess(data_queue, debug, process, positionEstimator)
+    if sys.platform.startswith("linux"):
+        receiver = ReceiverProcess(plot_queue, plot, threshold, mode, debug)
+    else:
+        receiver = NonLinuxReceiverProcess(plot_queue, plot, threshold, mode, debug)
     plotter = PlotterProcess(plot_queue, plot) if plot else None
 
     # Start processes
-    receiver.start()
-    processor.start()
+    if process:
+        receiver.start()
     if plotter:
         plotter.start()
 
@@ -415,7 +342,7 @@ def start(plot=False, process=True, debug=False, filename="", threshold=200, mod
         path = filename
         if os.path.isfile(path):
             if path.endswith('.npy'):
-                load_and_enqueue_data(path, data_queue, plot_queue, plot)
+                load_and_enqueue_data(path, receiver, plot_queue, plot)
             else:
                 print(f"{path} is a file but not a .npy file.")
         elif os.path.isdir(path):
@@ -423,7 +350,7 @@ def start(plot=False, process=True, debug=False, filename="", threshold=200, mod
             for filename in os.listdir(path):
                 if filename.endswith('.npy'):
                     full_path = os.path.join(path, filename)
-                    load_and_enqueue_data(full_path, data_queue, plot_queue, plot)
+                    load_and_enqueue_data(full_path, receiver, plot_queue, plot)
                     if first:
                         time.sleep(45.0)
                         first = False
@@ -433,7 +360,7 @@ def start(plot=False, process=True, debug=False, filename="", threshold=200, mod
             print(f"Error: File '{filename}' not found.")
             return None
 
-    return receiver, processor, plotter
+    return receiver, None, plotter  # Return None for the removed processor
 
 def stop_processes(*processes):
     """
@@ -456,7 +383,7 @@ def main():
     parser = argparse.ArgumentParser(description="SPI Data Processing")
     parser.add_argument("-p", action="store_true", help="Enable plotting")
     parser.add_argument("-r", action="store_true", help="Enable processing")
-    parser.add_argument("-d", action="store_true", help="Enable debug mode (save batch data to disk)")
+    parser.add_argument("-d", action="store_true", help="Enable debug mode (save shot data to disk)")
     parser.add_argument("-f", type=str, default="", help="File name to load data from (optional)")
     parser.add_argument("-t", type=int, default=200, choices=range(10, 255), help="Threshold value. Below 128 will check for minima, above for maxima (default: 200, min: 10, max: 255)")
     parser.add_argument("-m", type=int, default=0, choices=range(0, 2), help="Mode 0 for unfiltered threshold, Mode 1 for filtered threshold")
@@ -480,9 +407,9 @@ def main():
     try:
         # Keep the main thread alive
         while True:
-            # Check if processes are still alive
-            if not receiver.is_alive() and not processor.is_alive():
-                print("All processes have terminated")
+            # Check if receiver process is still alive
+            if not receiver.is_alive():
+                print("Receiver process has terminated")
                 break
             time.sleep(1)
     except KeyboardInterrupt:

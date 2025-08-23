@@ -3,7 +3,7 @@ import os
 from scipy.signal import find_peaks
 import scipy
 import itertools
-from numba import njit
+#from numba import njit
 
 s = 0
 c = 1595  # Speed of sound in the sheet (m/s)
@@ -12,7 +12,7 @@ z__2 = z__1
 z__3 = 0.0  
 z__4 = z__3
 
-@njit
+#@njit
 def getTimeDifferences(x,y, widthD, heightD):
     zUpper = -0.0
     zLower = -0.0
@@ -32,7 +32,7 @@ def getTimeDifferences(x,y, widthD, heightD):
 
     return [t12,t13,t14,t23,t24,t34]
 
-@njit
+#@njit
 def getJacobian2d(x, y, y__1, y__2, y__3, y__4, widthD):
     x__2 = widthD
     x__3 = widthD
@@ -60,7 +60,7 @@ def getJacobian2d(x, y, y__1, y__2, y__3, y__4, widthD):
     t31 = t34 * (-y__2 + t54);
     return np.array([[t35 - t57,t32 - t31],[t35 - t58, t32 - t59],[t35 - t60, t32 - t56],[t57 - t58, t31 - t59],[t57 - t60, t31 - t56],[t58 - t60, -t56 + t59]])
 
-@njit
+#@njit
 def getResidual2d(x,y,t,y__1,y__2,y__3,y__4, widthD):
     x__2 = widthD
     x__3 = widthD
@@ -82,7 +82,7 @@ def getResidual2d(x,y,t,y__1,y__2,y__3,y__4, widthD):
 
 
 #Find positive peaks in the area of the onset
-@njit 
+#@njit 
 def extract_indices(peakIdx, onset, peaksBefore = 1, peaksAfter = 1, max_distance = 50):
     # Find the next index in peakIdx that is greater than or equal to onset
     closest_index = None
@@ -113,7 +113,7 @@ def extract_indices(peakIdx, onset, peaksBefore = 1, peaksAfter = 1, max_distanc
     
     return peakIdx[start:end]
 
-@njit
+#@njit
 def update_variance(state, x):
     """ Update the variance state with a new data point. """
     n, mean, m2 = state
@@ -124,7 +124,7 @@ def update_variance(state, x):
     m2 += delta * delta2
     return (n, mean, m2)
 
-@njit
+#@njit
 def remove_variance(state, x):
     """ Remove a data point from the variance state. """
     n, mean, m2 = state
@@ -136,13 +136,13 @@ def remove_variance(state, x):
     m2 -= delta * (x - mean)
     return (n, mean, m2)
 
-@njit
+#@njit
 def compute_variance(state):
     """ Compute variance from state. """
     n, mean, m2 = state
     return m2 / (n - 1) if n > 1 else 0.0
 
-@njit
+#@njit
 def var_state_from_numpy(data):
     """ Initialize an OnlineVariance state from NumPy array. """
     n = len(data)
@@ -151,7 +151,7 @@ def var_state_from_numpy(data):
     return (n, mean, m2)
 
 
-@njit 
+#@njit 
 def compute_aic_optimized(data, offset, epsilon=1e-10):    
     # Left-side variance initialization using NumPy
     left_var_state = var_state_from_numpy(data[1:offset-1])
@@ -176,7 +176,7 @@ def compute_aic_optimized(data, offset, epsilon=1e-10):
 
     return aic
 
-@njit 
+#@njit 
 def getMinAic(data, offset, end, epsilon=1e-10):    
     # Left-side variance initialization using NumPy
     left_var_state = var_state_from_numpy(data[1:offset-1])
@@ -204,7 +204,7 @@ def getMinAic(data, offset, end, epsilon=1e-10):
 
     return minIndex
 
-@njit 
+#@njit 
 def runOptimization(lagsForSequence, heightD, widthD, u1, u2, u3, u4):
     # Calculate the position estimate
     posEstimate = np.array([[widthD/2],[heightD/2]])

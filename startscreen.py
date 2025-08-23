@@ -1,6 +1,6 @@
 # Put these at the top of your file
 import os
-os.environ['SDL_AUDIODRIVER'] = 'dummy'
+#os.environ['SDL_AUDIODRIVER'] = 'dummy'
 import pygame
 import pygame.locals
 import hmsysteme

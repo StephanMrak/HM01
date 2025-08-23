@@ -5,19 +5,14 @@ import json
 import threading
 import subprocess
 from io import BytesIO
-from bottle import Bottle, run, request, static_file, template, response, TEMPLATE_PATH
+from flask import Flask, render_template, request, jsonify, send_from_directory
 import hmsysteme
 from check_for_updates import CheckForUpdates, UpdateSystem
 import WiFiHelper
 import startscreen
 import hardware_com_micro
-import multiprocessing
-import atexit
 
-
-# ----------------------
-# Global State
-# ----------------------
+# Global state management (RAM efficient)
 class AppState:
     def __init__(self):
         self.game_processes = []
@@ -28,45 +23,36 @@ class AppState:
         self.screenshot_cache = None
         self.screenshot_timestamp = 0
         self.wifi_helper = None
-
+    
     def get_wifi_helper(self):
         if self.wifi_helper is None:
             self.wifi_helper = WiFiHelper.WiFiHelper()
         return self.wifi_helper
-
+    
     def cleanup(self):
+        # Clean up resources
         for process in self.game_processes + self.startscreen_processes:
             if hasattr(process, 'is_alive') and process.is_alive():
                 process.terminate()
         self.game_processes.clear()
         self.startscreen_processes.clear()
 
-
 # Global app state
 app_state = AppState()
 
-
-# ----------------------
-# Main webserver function
-# ----------------------
 def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
-    app = Bottle()
-
-    # Tell Bottle where to find templates
-    TEMPLATE_PATH.insert(0, os.path.join(path2, "templates"))
-
-    # ---------------
-    # Helpers
-    # ---------------
+    app = Flask(__name__)
+    
+    # Configure WiFi/Hotspot (simplified)
     def configure_wifi_or_hotspot():
         wifi = app_state.get_wifi_helper()
-
+        
         if not wifi._check_setup_complete():
             print("WARNING: Setup not complete. Please run setup_wifi_helper.sh first!")
             return "ShootingRange", "123456"
-
+        
         mode = wifi.get_current_mode()
-
+        
         if wifi.check_internet_connection():
             ssid = wifi.get_current_ssid()
             creds = wifi.get_current_network_credentials()
@@ -77,32 +63,32 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             if mode != "hotspot":
                 wifi.create_hotspot("ShootingRange", "123456", "DE", 7, True)
             return "ShootingRange", "123456"
-
+    
     def show_connection_screen():
         ssid, passw = configure_wifi_or_hotspot()
-        process = multiprocessing.get_context("fork").Process(
-            target=startscreen.startscreen, args=(ssid, passw)
-        )
+        import multiprocessing
+        process = multiprocessing.Process(target=startscreen.startscreen, args=(ssid, passw))
         process.start()
         return process
-
+    
     def close_connection_screen():
         for process in app_state.startscreen_processes:
             if hasattr(process, 'is_alive') and process.is_alive():
                 process.terminate()
         app_state.startscreen_processes.clear()
-
+    
     def start_game(gamefile):
         hmsysteme.open_game()
         time.sleep(0.5)
         game_module = __import__(gamefile)
-        game_process = multiprocessing.get_context("fork").Process(target=game_module.main)
+        import multiprocessing
+        game_process = multiprocessing.Process(target=game_module.main)
         game_process.start()
         receiver, processor, plotter = hardware_com_micro.start(
-            plot=False, process=True, debug=False, filename="", threshold=200, mode=1
+            plot=False, process=True, debug=False, filename="", threshold=135, mode=1
         )
         return [game_process, receiver, processor]
-
+    
     def close_game():
         for process in app_state.game_processes:
             if hasattr(process, 'is_alive') and process.is_alive():
@@ -113,20 +99,24 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
         app_state.game_processes.clear()
         app_state.action_buttons = ["no function"] * 9
         app_state.button_states = [False] * 9
-
-    # ----------------------
-    # Background updater
-    # ----------------------
+    
+    # Initialize connection screen
+    app_state.startscreen_processes.append(show_connection_screen())
+    backgroundqueue.put("open")
+    
+    # Background update thread (lightweight)
     def background_updater():
         while True:
             try:
+                # Update screenshot cache (only if changed)
                 if hmsysteme.screenshot_refresh():
                     screenshot_path = os.path.join(hmsysteme.get_path(), "screencapture.jpg")
                     if os.path.exists(screenshot_path):
                         with open(screenshot_path, 'rb') as f:
                             app_state.screenshot_cache = base64.b64encode(f.read()).decode('utf-8')
                         app_state.screenshot_timestamp = time.time()
-
+                
+                # Update button states
                 if hmsysteme.game_isactive():
                     button_names = hmsysteme.get_button_names()
                     if button_names:
@@ -137,31 +127,24 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
                             else:
                                 app_state.action_buttons[i] = "no function"
                                 app_state.button_states[i] = False
-
-                time.sleep(0.5)
+                
+                time.sleep(0.5)  # Reduced update frequency
             except Exception as e:
                 print(f"Background update error: {e}")
                 time.sleep(1)
-
-    # Start connection screen + updater
-    app_state.startscreen_processes.append(show_connection_screen())
-    backgroundqueue.put("open")
-
+    
+    # Start background thread
     update_thread = threading.Thread(target=background_updater, daemon=True)
     update_thread.start()
-
-    # ----------------------
-    # Routes
-    # ----------------------
+    
     @app.route('/')
     def index():
-        return template("index")  # looks for templates/index.tpl (or .html)
-
+        return render_template('index.html')
+    
     @app.route('/api/state')
     def get_state():
         players = hmsysteme.get_playerstatus() or []
-        response.content_type = "application/json"
-        return json.dumps({
+        return jsonify({
             'status': app_state.current_status,
             'buttons': app_state.action_buttons,
             'button_states': app_state.button_states,
@@ -170,14 +153,14 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             'screenshot': app_state.screenshot_cache,
             'screenshot_timestamp': app_state.screenshot_timestamp
         })
-
-    @app.route('/api/action/<button_id:int>')
+    
+    @app.route('/api/action/<int:button_id>')
     def button_action(button_id):
         if 1 <= button_id <= 9:
             hmsysteme.put_action(button_id)
-            return {'success': True}
-        return {'success': False}
-
+            return jsonify({'success': True})
+        return jsonify({'success': False})
+    
     @app.route('/api/start_game/<game_name>')
     def start_game_route(game_name):
         if game_name in gamefiles:
@@ -185,14 +168,14 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             close_game()
             app_state.game_processes.extend(start_game(game_name))
             app_state.current_status = f"{game_name} now running"
-            return {'success': True}
-        return {'success': False}
-
-    @app.post('/api/players')
+            return jsonify({'success': True})
+        return jsonify({'success': False})
+    
+    @app.route('/api/players', methods=['POST'])
     def manage_players():
         data = request.json
         action = data.get('action')
-
+        
         if action == 'add':
             name = data.get('name', '').strip()
             if name and len(name) < 20:
@@ -200,74 +183,77 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
                 if all(player[0] != name for player in current_players):
                     current_players.append([name, True])
                     hmsysteme.put_playernames(current_players)
-                    return {'success': True}
-
+                    return jsonify({'success': True})
+        
         elif action == 'delete':
             index = data.get('index')
             current_players = hmsysteme.get_playerstatus() or []
             if 0 <= index < len(current_players):
                 current_players.pop(index)
                 hmsysteme.put_playernames(current_players)
-                return {'success': True}
-
+                return jsonify({'success': True})
+        
         elif action == 'toggle':
             index = data.get('index')
             current_players = hmsysteme.get_playerstatus() or []
             if 0 <= index < len(current_players):
                 current_players[index][1] = not current_players[index][1]
                 hmsysteme.put_playernames(current_players)
-                return {'success': True}
-
-        return {'success': False}
-
+                return jsonify({'success': True})
+        
+        return jsonify({'success': False})
+    
     @app.route('/api/system/<action>')
     def system_action(action):
         if action == 'close_all':
             close_game()
             app_state.startscreen_processes.append(show_connection_screen())
             app_state.current_status = "No game running yet"
-            return {'success': True}
-
+            return jsonify({'success': True})
+        
         elif action == 'shutdown':
             subprocess.run(["sudo", "poweroff"])
-            return {'success': True}
-
+            return jsonify({'success': True})
+        
         elif action == 'reboot':
             subprocess.run(["sudo", "reboot"])
-            return {'success': True}
-
+            return jsonify({'success': True})
+        
         elif action == 'check_updates':
             has_updates = CheckForUpdates()
-            return {'has_updates': has_updates}
-
+            return jsonify({'has_updates': has_updates})
+        
         elif action == 'update':
             UpdateSystem()
-            return {'success': True}
-
-        return {'success': False}
-
+            return jsonify({'success': True})
+        
+        return jsonify({'success': False})
+    
     @app.route('/api/wifi/scan')
     def scan_wifi():
         networks = app_state.get_wifi_helper().scan_for_ssids()
-        return {'networks': networks}
-
-    @app.post('/api/wifi/connect')
+        return jsonify({'networks': networks})
+    
+    @app.route('/api/wifi/connect', methods=['POST'])
     def connect_wifi():
         data = request.json
         ssid = data.get('ssid')
         password = data.get('password')
         if ssid:
             success = app_state.get_wifi_helper().connect_to_network(ssid, password)
-            return {'success': success}
-        return {'success': False}
-
-    @app.route('/static/<filename:path>')
+            return jsonify({'success': success})
+        return jsonify({'success': False})
+    
+    @app.route('/static/<path:filename>')
     def static_files(filename):
-        return static_file(filename, root=os.path.join(path2, "static"))
-
-    # Cleanup
+        return send_from_directory('static', filename)
+    
+    # Cleanup on exit
+    import atexit
     atexit.register(app_state.cleanup)
-
+    
     # Start server
-    run(app, host='0.0.0.0', port=8081, debug=debug_flag, server='wsgiref')
-
+    if debug_flag:
+        app.run(host='127.0.0.1', port=8081, debug=True, threaded=True)
+    else:
+        app.run(host='0.0.0.0', port=8081, debug=False, threaded=True)

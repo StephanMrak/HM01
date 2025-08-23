@@ -66,8 +66,8 @@ def main():
         for i in range(min(show_last_shots, len(shot_positions))):
             pos_index = len(shot_positions) - min(show_last_shots, len(shot_positions)) + i
             x, y = shot_positions[pos_index]
-            screen_x = int(x * 1000)
-            screen_y = int(y * 1000)
+            screen_x = x
+            screen_y = y
             
             screen_x = max(10, min(size[0] - 10, screen_x))
             screen_y = max(60, min(size[1] - 10, screen_y))
@@ -77,7 +77,7 @@ def main():
             else:
                 color = (255, 255, 255)  # White for all other shots
             
-            dot_size = 15
+            dot_size = 10 
             pygame.draw.circle(screen, color, (screen_x, screen_y), dot_size)
             pygame.draw.circle(screen, (0, 0, 0), (screen_x, screen_y), dot_size, 2)
             
@@ -136,8 +136,8 @@ def main():
                 hmsysteme.put_button_names([button_text, "COORDS: ON" if show_coordinates else "COORDS: OFF", "TEST SHOT", "x", "x", "x", "x", "x", "x"])
                 
             if iGetAction == 3:
-                test_x = random.uniform(0.1, 1.3)
-                test_y = random.uniform(0.1, 0.8)
+                test_x = random.uniform(0, 1360)
+                test_y = random.uniform(0, 760)
                 shot_positions.append((test_x, test_y))
                 print(f"Test shot generated at: ({test_x:.3f}, {test_y:.3f})")
 
@@ -159,10 +159,12 @@ def main():
                 print("X: ", mausx, "Y: ", mausy)
 
         if hmsysteme.hit_detected():
+            print("Hit received")
             hit_for_screenshot = True
             pos = hmsysteme.get_pos()
-            mausx = pos[0] * 1000 if pos else 0
-            mausy = pos[1] * 1000 if pos else 0
+            mausx = pos[0] if pos else 0
+            mausy = pos[1] if pos else 0
+            print(f"Hit position {pos[0]} , {pos[1]}")
             if pos and len(pos) >= 2:
                 x, y = pos[0], pos[1]
                 shot_positions.append((x, y))
