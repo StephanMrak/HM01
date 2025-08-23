@@ -23,11 +23,13 @@ def main():
     offsetWizard = (0, 0)
     offsetKnight = (0, 0)
     import time
+    import os
+    os.environ['SDL_AUDIODRIVER'] = 'dummy'
     import pygame
     import hmsysteme
     import math
     import random
-    import os
+
     import sys
     import platform
     import pygame.freetype

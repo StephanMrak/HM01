@@ -1,11 +1,12 @@
 # Put these at the top of your file
+import os
+os.environ['SDL_AUDIODRIVER'] = 'dummy'
 import pygame
 import pygame.locals
 import hmsysteme
 import qrcode
 import socket
 import math
-import os
 from io import BytesIO
 
 def startscreen(wifi_ssid=None, wifi_password=None, debug_flag = False):

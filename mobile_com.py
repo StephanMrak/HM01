@@ -1,510 +1,273 @@
-import multiprocessing
+import os
 import time
+import base64
+import json
+import threading
+import subprocess
+from io import BytesIO
+from bottle import Bottle, run, request, static_file, template, response, TEMPLATE_PATH
 import hmsysteme
 from check_for_updates import CheckForUpdates, UpdateSystem
-import subprocess
 import WiFiHelper
 import startscreen
 import hardware_com_micro
-
-WIDTH = '100%'
-HEIGHT = '1500px'
-action_buttons = []
-
-def show_connection_screen():
-    ssid, passw = configure_wifi_or_hotspot()
-    process = multiprocessing.Process(target=startscreen.startscreen, args=(ssid, passw))
-    process.start()
-    return process
-
-def close_connection_screen(processes):
-    for process in processes:
-        if process.is_alive():
-            process.terminate()
-        if process in processes:
-            processes.remove(process)
+import multiprocessing
+import atexit
 
 
-def start_game(gamefile, backgroundqueue):
-    hmsysteme.open_game()
-    game_module = __import__(gamefile)
-    game_process = multiprocessing.Process(target=game_module.main)
-    game_process.start()
-    #starting hw com will reset the receiver board
-    receiver, processor, plotter = hardware_com_micro.start(plot=False, process=True, debug=False, filename="", threshold=135, mode=1)
-    return [game_process, receiver, processor]
+# ----------------------
+# Global State
+# ----------------------
+class AppState:
+    def __init__(self):
+        self.game_processes = []
+        self.startscreen_processes = []
+        self.action_buttons = ["no function"] * 9
+        self.button_states = [False] * 9
+        self.current_status = "No game running yet"
+        self.screenshot_cache = None
+        self.screenshot_timestamp = 0
+        self.wifi_helper = None
 
-def close_game(processes, buttons, backgroundqueue):
-    for process in processes:
-        if process.is_alive():
-            hmsysteme.close_game()
-            hmsysteme.put_button_names(False)
-            time.sleep(0.1)
-            process.terminate()
-        if process in processes:
-            processes.remove(process)
-    for button in buttons:
-        try:
-            button.set_text("no function")
-            button.set_enabled(False)
-        except:
-            pass
+    def get_wifi_helper(self):
+        if self.wifi_helper is None:
+            self.wifi_helper = WiFiHelper.WiFiHelper()
+        return self.wifi_helper
 
-def is_name_unique(name, players):
-    return all(player[0] != name for player in players)
+    def cleanup(self):
+        for process in self.game_processes + self.startscreen_processes:
+            if hasattr(process, 'is_alive') and process.is_alive():
+                process.terminate()
+        self.game_processes.clear()
+        self.startscreen_processes.clear()
 
-_wifi_helper = None
 
-def get_wifi_helper():
-    global _wifi_helper
-    if _wifi_helper is None:
-        _wifi_helper = WiFiHelper.WiFiHelper()
-    return _wifi_helper
+# Global app state
+app_state = AppState()
 
-def configure_wifi_or_hotspot():
-    # Initialize the WiFi helper
-    wifi = get_wifi_helper()
-    
-    # Check if setup has been completed
-    if not wifi._check_setup_complete():
-        print("WARNING: Setup not complete. Please run setup_wifi_helper.sh first!")
-        print("sudo bash setup_wifi_helper.sh $USER")
-        print("")
-    
-    # Check current mode
-    mode = wifi.get_current_mode()
-    print(f"Current mode: {mode}")
-    
-    # Check internet connection
-    ssid = None
-    passw = None
-    encryption = None
-    if wifi.check_internet_connection():
-        print("Internet connection available")
-        ssid = wifi.get_current_ssid()
-        pw = "Your Wifi Password"
-        if ssid:
-            print(f"Connected to: {ssid}")
+
+# ----------------------
+# Main webserver function
+# ----------------------
+def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
+    app = Bottle()
+
+    # Tell Bottle where to find templates
+    TEMPLATE_PATH.insert(0, os.path.join(path2, "templates"))
+
+    # ---------------
+    # Helpers
+    # ---------------
+    def configure_wifi_or_hotspot():
+        wifi = app_state.get_wifi_helper()
+
+        if not wifi._check_setup_complete():
+            print("WARNING: Setup not complete. Please run setup_wifi_helper.sh first!")
+            return "ShootingRange", "123456"
+
+        mode = wifi.get_current_mode()
+
+        if wifi.check_internet_connection():
+            ssid = wifi.get_current_ssid()
             creds = wifi.get_current_network_credentials()
             if creds:
-                ssid = creds["ssid"]
-                passw = creds["password"]
-                encryption = creds["encryption"]
-    else:
-        print("No internet connection")
-        # Create a hotspot if not already in hotspot mode
-        if mode != "hotspot":
-            print("\nCreating hotspot...")
-            ssid_attempt = "ShootingRange"
-            pw_attempt = "123456"
-            success = wifi.create_hotspot(
-                ssid=ssid_attempt,
-                password=pw_attempt,
-                country="DE",  # Change to your country code
-                channel=7,
-                enable_nat=True
-            )
-            
-            if success:
-                # TODO: is it really WPA?
-                ssid = ssid_attempt
-                passw = pw_attempt
-                encryption = "WPA"
-                print("Hotspot created successfully!")
-                print("Connect to WiFi: ShootingRange")
-                print("Password: 123456")
-                print("Then access: http://192.168.4.1")
-    return ssid, passw
+                return creds["ssid"], creds["password"]
+            return ssid, "Your Wifi Password"
+        else:
+            if mode != "hotspot":
+                wifi.create_hotspot("ShootingRange", "123456", "DE", 7, True)
+            return "ShootingRange", "123456"
 
-def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
-    import os
-    import io
-    import PIL.Image
-    import remi.gui as gui
-    from remi import start, App
+    def show_connection_screen():
+        ssid, passw = configure_wifi_or_hotspot()
+        process = multiprocessing.get_context("fork").Process(
+            target=startscreen.startscreen, args=(ssid, passw)
+        )
+        process.start()
+        return process
 
-    path = hmsysteme.get_path()
-    game_process = []
-    startscreen_process = []
-    startscreen_process.append(show_connection_screen())
+    def close_connection_screen():
+        for process in app_state.startscreen_processes:
+            if hasattr(process, 'is_alive') and process.is_alive():
+                process.terminate()
+        app_state.startscreen_processes.clear()
+
+    def start_game(gamefile):
+        hmsysteme.open_game()
+        time.sleep(0.5)
+        game_module = __import__(gamefile)
+        game_process = multiprocessing.get_context("fork").Process(target=game_module.main)
+        game_process.start()
+        receiver, processor, plotter = hardware_com_micro.start(
+            plot=False, process=True, debug=False, filename="", threshold=135, mode=1
+        )
+        return [game_process, receiver, processor]
+
+    def close_game():
+        for process in app_state.game_processes:
+            if hasattr(process, 'is_alive') and process.is_alive():
+                hmsysteme.close_game()
+                hmsysteme.put_button_names(False)
+                time.sleep(0.1)
+                process.terminate()
+        app_state.game_processes.clear()
+        app_state.action_buttons = ["no function"] * 9
+        app_state.button_states = [False] * 9
+
+    # ----------------------
+    # Background updater
+    # ----------------------
+    def background_updater():
+        while True:
+            try:
+                if hmsysteme.screenshot_refresh():
+                    screenshot_path = os.path.join(hmsysteme.get_path(), "screencapture.jpg")
+                    if os.path.exists(screenshot_path):
+                        with open(screenshot_path, 'rb') as f:
+                            app_state.screenshot_cache = base64.b64encode(f.read()).decode('utf-8')
+                        app_state.screenshot_timestamp = time.time()
+
+                if hmsysteme.game_isactive():
+                    button_names = hmsysteme.get_button_names()
+                    if button_names:
+                        for i in range(9):
+                            if i < len(button_names):
+                                app_state.action_buttons[i] = button_names[i]
+                                app_state.button_states[i] = True
+                            else:
+                                app_state.action_buttons[i] = "no function"
+                                app_state.button_states[i] = False
+
+                time.sleep(0.5)
+            except Exception as e:
+                print(f"Background update error: {e}")
+                time.sleep(1)
+
+    # Start connection screen + updater
+    app_state.startscreen_processes.append(show_connection_screen())
     backgroundqueue.put("open")
 
-    default_style = {
-        'background': '#2c2c2c',
-        'color': '#ffffff',
-        'font-size': '18px',
-        'border-radius': '10px',
-        'border': 'none',
-        'padding': '10px',
-        'font-family': 'Segoe UI, Roboto, sans-serif'
-    }
+    update_thread = threading.Thread(target=background_updater, daemon=True)
+    update_thread.start()
 
-    button_style = {
-        'font-size': '18px',
-        'text-align': 'center',
-        'background': '#3a3a3a',
-        'color': '#ffffff',
-        'border': 'none',
-        'border-radius': '8px',
-        'margin': '10px',
-        'padding': '10px 10px',
-        'box-shadow': '0 4px 6px rgba(0,0,0,0.1)'
-    }
+    # ----------------------
+    # Routes
+    # ----------------------
+    @app.route('/')
+    def index():
+        return template("index")  # looks for templates/index.tpl (or .html)
 
-    button_small_style = {
-        'font-size': '18px',
-        'text-align': 'center',
-        'background': '#3a3a3a',
-        'color': '#ffffff',
-        'border': 'none',
-        'border-radius': '8px',
-        'margin': '10px',
-        'padding': '2px 2px',
-        'box-shadow': '0 4px 6px rgba(0,0,0,0.1)'
-    }
+    @app.route('/api/state')
+    def get_state():
+        players = hmsysteme.get_playerstatus() or []
+        response.content_type = "application/json"
+        return json.dumps({
+            'status': app_state.current_status,
+            'buttons': app_state.action_buttons,
+            'button_states': app_state.button_states,
+            'players': players,
+            'games': gamefiles,
+            'screenshot': app_state.screenshot_cache,
+            'screenshot_timestamp': app_state.screenshot_timestamp
+        })
 
-    label_style = {
-        'font-size': '20px',
-        'color': '#ffffff',
-        'margin-bottom': '10px'
-    }
+    @app.route('/api/action/<button_id:int>')
+    def button_action(button_id):
+        if 1 <= button_id <= 9:
+            hmsysteme.put_action(button_id)
+            return {'success': True}
+        return {'success': False}
 
-    input_style = {
-        'text-align': 'left',
-        'font-size': '18px',
-        'background': '#444',
-        'color': '#fff',
-        'border': '1px solid #666',
-        'border-radius': '8px',
-        'padding': '4px',
-        'line-height': '35px',
-        'vertical-align': 'middle'
-    }
+    @app.route('/api/start_game/<game_name>')
+    def start_game_route(game_name):
+        if game_name in gamefiles:
+            close_connection_screen()
+            close_game()
+            app_state.game_processes.extend(start_game(game_name))
+            app_state.current_status = f"{game_name} now running"
+            return {'success': True}
+        return {'success': False}
 
-    dialog_style = {
-        'background': '#2c2c2c',
-        'color': '#ffffff',
-        'font-size': '18px',
-        'border-radius': '12px',
-        'padding': '20px',
-        'box-shadow': '0 4px 12px rgba(0, 0, 0, 0.5)'
-    }
+    @app.post('/api/players')
+    def manage_players():
+        data = request.json
+        action = data.get('action')
 
-    listview_style = {
-        'text-align': 'center',
-        'background': '#2c2c2c',
-        'color': '#ffffff',
-        'font-size': '18px',
-        'border-radius': '10px',
-        'border': 'none',
-        'font-family': 'Segoe UI, Roboto, sans-serif'
-    }
-
-    grid_style = {
-        'text-align': 'left',
-        'font-size': '18px',
-        'color': '#fff',
-        'padding': '4px',
-        'line-height': '35px',
-        'vertical-align': 'middle'
-    }
-    checkbox_style = {
-        'width': '50px',
-        'height': '50px',
-        'margin': '1%',
-        'display': 'flex',
-        'align-items': 'center',
-        'justify-content': 'center',
-        'background-color': '#2c2c2c',
-        'border-radius': '8px'
-    }
-
-
-    tab_active_style = {
-        'width': '20%',
-        'height': '35px',
-        'background': '#444',
-        'color': '#fff',
-        'padding': '2px 2px',
-        'border': '1px solid #666',
-        'border-radius': '10px',
-        'margin-right': '4px',
-        'font-size': '16px',
-        'cursor': 'pointer',
-        'line-height': '35px',
-        'font-weight': 'bold',
-        'vertical-align': 'middle'
-
-    }
-
-    tab_inactive_style = {
-        'width': '20%',
-        'height': '35px',
-        'background': '#3a3a3a',
-        'color': '#fff',
-        'padding': '2px 2px',
-        'border': '1px solid #666',
-        'border-radius': '10px',
-        'margin-right': '4px',
-        'font-size': '16px',
-        'cursor': 'pointer',
-        'line-height': '35px',
-        'font-weight': 'normal',
-        'vertical-align': 'middle'
-    }
-
-
-    container_home = gui.VBox(width=WIDTH, height=HEIGHT, style=default_style.copy())
-    container_players = gui.VBox(width=WIDTH, height=HEIGHT, style=default_style.copy())
-    container_games = gui.VBox(width=WIDTH, height=HEIGHT, style=default_style.copy())
-    container_settings = gui.VBox(width=WIDTH, height=HEIGHT, style=default_style.copy())
-
-    class PILImageViewer(gui.Image):
-        def __init__(self, **kwargs):
-            super().__init__(os.path.join(path, "screencapture.jpg"), **kwargs)
-            self._buf = None
-
-        def load(self, file_path_name):
-            pil_image = PIL.Image.open(file_path_name)
-            self._buf = io.BytesIO()
-            pil_image.save(self._buf, format='JPEG')
-            self.refresh()
-
-        def refresh(self):
-            timestamp = int(time.time() * 1e6)
-            self.attributes['src'] = f"/{id(self)}/get_image_data?update_index={timestamp}"
-
-        def get_image_data(self, update_index):
-            if self._buf is None:
-                return None
-            self._buf.seek(0)
-            headers = {'Content-type': 'image/jpg'}
-            return [self._buf.read(), headers]
-
-    def refresh_player_list():
-        container_players.empty()
-
-        label = gui.Label('Input Player Name:', width='50%', height='35px', style=label_style.copy())
-        input_name = gui.TextInput(width='30%', height='35px', style=input_style.copy())
-
-        def on_name_entered(widget, new_value):
-            name = input_name.get_text()
+        if action == 'add':
+            name = data.get('name', '').strip()
             if name and len(name) < 20:
                 current_players = hmsysteme.get_playerstatus() or []
-                if is_name_unique(name, current_players):
+                if all(player[0] != name for player in current_players):
                     current_players.append([name, True])
                     hmsysteme.put_playernames(current_players)
-                    refresh_player_list()
+                    return {'success': True}
 
-        input_name.onchange.do(on_name_entered)
-        container_players.append(label)
-        container_players.append(input_name)
-        container_players.append(gui.Label('', height='10px'))
+        elif action == 'delete':
+            index = data.get('index')
+            current_players = hmsysteme.get_playerstatus() or []
+            if 0 <= index < len(current_players):
+                current_players.pop(index)
+                hmsysteme.put_playernames(current_players)
+                return {'success': True}
 
-        player_list = hmsysteme.get_playerstatus() or []
-        grid = gui.GridBox(width=500)
-        grid.style.update(default_style.copy())
-        grid.set_row_gap(20)
-        grid.set_column_gap(20)
+        elif action == 'toggle':
+            index = data.get('index')
+            current_players = hmsysteme.get_playerstatus() or []
+            if 0 <= index < len(current_players):
+                current_players[index][1] = not current_players[index][1]
+                hmsysteme.put_playernames(current_players)
+                return {'success': True}
 
-        layout = [['delete' + str(i), 'check' + str(i), 'label' + str(i)] for i in range(len(player_list))]
-        grid.define_grid(layout)
+        return {'success': False}
 
-        for i, (player_name, is_active) in enumerate(player_list):
-            checkbox = gui.CheckBox(is_active, width='35px', height='35px', margin='1%', style=checkbox_style.copy())
-            label = gui.Label(player_name, width='300px', height='35px', margin='1%', style=grid_style.copy())
-            delete_button = gui.Button('DELETE', width='130px', height='35px', margin='1%',
-                                       style={**button_small_style.copy(), 'background': 'red'})
+    @app.route('/api/system/<action>')
+    def system_action(action):
+        if action == 'close_all':
+            close_game()
+            app_state.startscreen_processes.append(show_connection_screen())
+            app_state.current_status = "No game running yet"
+            return {'success': True}
 
-            def toggle_active(widget, new_value, index=i):
-                player_list[index][1] = new_value
-                hmsysteme.put_playernames(player_list)
+        elif action == 'shutdown':
+            subprocess.run(["sudo", "poweroff"])
+            return {'success': True}
 
-            def delete_player(widget, index=i):
-                player_list.pop(index)
-                hmsysteme.put_playernames(player_list)
-                refresh_player_list()
+        elif action == 'reboot':
+            subprocess.run(["sudo", "reboot"])
+            return {'success': True}
 
-            checkbox.onchange.do(toggle_active)
-            delete_button.onclick.do(delete_player)
-            grid.append({f'delete{i}': delete_button, f'check{i}': checkbox, f'label{i}': label})
+        elif action == 'check_updates':
+            has_updates = CheckForUpdates()
+            return {'has_updates': has_updates}
 
-        container_players.append(grid)
+        elif action == 'update':
+            UpdateSystem()
+            return {'success': True}
 
-    class HMDialog(gui.GenericDialog):
-        def __init__(self,*args,**kwargs):
-            super().__init__(*args,**kwargs)
-        def apply_style(self):
-            self.style.update(dialog_style.copy())
-            for key, child in self.children.items():
-                if isinstance(child, gui.Container):
-                    child.style.update(default_style.copy())  # or dialog_style if you prefer
-                    for subchild in child.children.values():
-                        if isinstance(subchild, gui.Widget):
-                            subchild.style.update(default_style.copy())
-                else:
-                    child.style.update(default_style.copy())
-            self.conf.style.update(button_small_style.copy())
-            self.cancel.style.update(button_small_style.copy())
-            self.container.style.update(default_style.copy())
+        return {'success': False}
 
-    class HMInterface(App):
-        def __init__(self, *args):
-            super().__init__(*args)
+    @app.route('/api/wifi/scan')
+    def scan_wifi():
+        networks = app_state.get_wifi_helper().scan_for_ssids()
+        return {'networks': networks}
 
-        def idle(self):
-            time.sleep(0.1)
-            if hmsysteme.screenshot_refresh():
-                self.image_widget.load(file_path_name=os.path.join(path, "screencapture.jpg"))
+    @app.post('/api/wifi/connect')
+    def connect_wifi():
+        data = request.json
+        ssid = data.get('ssid')
+        password = data.get('password')
+        if ssid:
+            success = app_state.get_wifi_helper().connect_to_network(ssid, password)
+            return {'success': success}
+        return {'success': False}
 
-            if hmsysteme.game_isactive():
-                button_names = hmsysteme.get_button_names()
-                if button_names:
-                    for i, button in enumerate(action_buttons):
-                        if i < len(button_names):
-                            button.set_text(button_names[i])
-                            button.set_enabled(True)
-                        else:
-                            button.set_text("no function")
-                            button.set_enabled(False)
+    @app.route('/static/<filename:path>')
+    def static_files(filename):
+        return static_file(filename, root=os.path.join(path2, "static"))
 
-        def main(self):
-            global action_buttons
-            tab_box = gui.TabBox(width=WIDTH, style=default_style.copy())
+    # Cleanup
+    atexit.register(app_state.cleanup)
 
-            self.status_label = gui.Label('No game running yet', width='100%', height='35px', style=label_style.copy())
-            container_home.append(self.status_label)
+    # Start server
+    run(app, host='0.0.0.0', port=8081, debug=debug_flag, server='wsgiref')
 
-            self.image_widget = PILImageViewer(width='100%', height='auto',
-                                               style={'border-radius': '12px', 'box-shadow': '0 2px 12px rgba(0,0,0,0.2)'})
-            self.image_widget.load(file_path_name=os.path.join(path2, "logo.jpg"))
-            container_home.append(self.image_widget)
-
-            for i in range(9):
-                def button_action(widget, index=i):
-                    hmsysteme.put_action(index + 1)
-
-                button = gui.Button("no function", width='31%', height='50px', style=button_style.copy())
-                button.onclick.do(button_action)
-                button.set_enabled(False)
-                action_buttons.append(button)
-                container_home.append(button)
-
-            for i, game in enumerate(gamefiles):
-                def start_game_callback(widget, index=i):
-                    close_connection_screen(startscreen_process)
-                    close_game(game_process, action_buttons, backgroundqueue)
-                    game_process.extend(start_game(gamefiles[index], backgroundqueue))
-                    self.status_label.set_text(f"{gamefiles[index]} now running")
-
-                game_button = gui.Button(f'Run {game}', width='31%', height='50px', style=button_style.copy())
-                game_button.onclick.do(start_game_callback)
-                container_games.append(game_button)
-
-            for label, handler in [
-                ("Close all", self.on_close_all),
-                ("System Shutdown", self.on_shutdown),
-                ("System Reboot", self.on_reboot),
-                ("Check for Updates", self.on_check_updates),
-                ("Add Device to Local Network", self.on_add_device)
-            ]:
-                button = gui.Button(label, width='31%', height='50px', style=button_style.copy())
-                button.onclick.do(handler)
-                container_settings.append(button)
-
-            refresh_player_list()
-
-            tab_box.append(container_home, 'Home')
-            tab_box.append(container_players, 'Players')
-            tab_box.append(container_games, 'Games')
-            tab_box.append(container_settings, 'Settings')
-
-            self.update_tab_styles(tab_box,'Home')
-            tab_box.on_tab_selection.do(lambda widget, tab_name: self.update_tab_styles(widget,tab_name))
-
-
-            return tab_box
-
-        def on_close_all(self, widget):
-            close_game(game_process, action_buttons, backgroundqueue)
-            startscreen_process.append(show_connection_screen())
-            self.status_label.set_text("No game running yet")
-
-        def on_stop_server(self, widget):
-            self.server.server_starter_instance._alive = False
-            self.server.server_starter_instance._sserver.shutdown()
-
-        def on_shutdown(self, widget):
-            dialog = HMDialog(width=350, title='Shutdown', message='Do you really want to shutdown the system?')
-            dialog.apply_style()
-            dialog.confirm_dialog.do(lambda w: subprocess.run(["sudo", "poweroff"]))
-            dialog.show(self)
-
-        def on_reset(self, widget):
-            pass
-
-        def on_reboot(self, widget):
-            dialog = HMDialog(width=350, title='Reboot', message='Do you really want to reboot the system?')
-            dialog.apply_style()
-            dialog.confirm_dialog.do(lambda w: subprocess.run(["sudo", "reboot"]))
-            dialog.show(self)
-
-        def on_check_updates(self, widget):
-            if CheckForUpdates():
-                dialog = HMDialog(width=350, title='Update Available', message='Do you want to update now?')
-                dialog.style.update(default_style.copy())
-                dialog.confirm_dialog.do(lambda w: UpdateSystem())
-            else:
-                dialog = HMDialog(width=350, title='No Updates', message='No update available')
-                dialog.style.update(default_style.copy())
-            dialog.apply_style()
-            dialog.show(self)
-
-        def adddevicecallback(self, widget, selectedkey):
-            for key,value in widget.children.items():
-                if selectedkey==key:
-                    value.style.update({**listview_style.copy(), 'background': '#444'})
-                else:
-                    value.style.update(listview_style.copy())
-
-        def update_tab_styles(self, tab_box, selected_tab_name):
-            for tab_name, tab_button in tab_box.children['_container_tab_titles'].children.items():
-                if tab_name == selected_tab_name:
-                    tab_button.style.update(tab_active_style)
-                else:
-                    tab_button.style.update(tab_inactive_style)
-
-
-        def on_add_device(self, widget):
-            networks = self.scan_wifi()
-            dialog = HMDialog(width=350, title='Available Networks')
-            dialog.style.update(default_style.copy())
-
-            list_view = gui.ListView.new_from_list(networks, width=300, height=120, margin='10px')
-            list_view.style.update(default_style.copy())
-            list_view.onselection.do(self.adddevicecallback)
-            for key, value in list_view.children.items():
-                value.style.update(listview_style.copy())
-            password_input = gui.TextInput(width='50%', height='35px', style=input_style.copy())
-
-            dialog.add_field_with_label("listview_ssids","select network to connect",list_view)
-            dialog.add_field_with_label("psw_input", "enter password", password_input)
-            dialog.apply_style()
-            dialog.confirm_dialog.do(lambda w: self.connect_to_wifi(list_view.get_value(), password_input.get_text()))
-            dialog.show(self)
-
-        def scan_wifi(self):
-            return get_wifi_helper().scan_for_ssids()
-
-        def connect_to_wifi(self, ssid, password):
-            if ssid:
-                get_wifi_helper().connect_to_network(ssid, password)
-
-
-
-
-    if debug_flag:
-        start(HMInterface, start_browser=False)
-    else:
-        start(HMInterface, address='0.0.0.0', port=8081, multiple_instance=False, enable_file_cache=True,
-              update_interval=0.1, start_browser=False)
