@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shooting Range Control</title>
+    <style>
+        :root {
+            --primary-bg: #0d1117;
+            --secondary-bg: #161b22;
+            --accent-bg: #21262d;
+            --card-bg: #1c2128;
+            --primary-color: #f0f6fc;
+            --secondary-color: #8b949e;
+            --accent-color: #58a6ff;
+            --success-color: #3fb950;
+            --warning-color: #d29922;
+            --danger-color: #f85149;
+            --border-color: #30363d;
+            --hover-bg: #262c36;
+            --glow-color: rgba(88, 166, 255, 0.4);
+            --success-glow: rgba(63, 185, 80, 0.4);
+            --danger-glow: rgba(248, 81, 73, 0.4);
+            --border-radius: 8px;
+            --border-radius-lg: 12px;
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            background: var(--primary-bg);
+            color: var(--primary-color);
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: var(--border-radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+            animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status {
+            font-size: 1.1rem;
+            color: var(--accent-color);
+            font-weight: 500;
+            padding: 8px 16px;
+            background: rgba(88, 166, 255, 0.1);
+            border-radius: var(--border-radius);
+            display: inline-block;
+            border: 1px solid rgba(88, 166, 255, 0.2);
+        }
+
+        .tabs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 4px;
+            margin-bottom: 32px;
+            background: var(--secondary-bg);
+            border-radius: var(--border-radius-lg);
+            padding: 6px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+        }
+
+        .tab {
+            padding: 12px 16px;
+            text-align: center;
+            background: transparent;
+            border: none;
+            color: var(--secondary-color);
+            cursor: pointer;
+            border-radius: var(--border-radius);
+            transition: var(--transition);
+            font-size: 14px;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tab::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--accent-color);
+            opacity: 0;
+            transition: var(--transition);
+            border-radius: var(--border-radius);
+        }
+
+        .tab span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .tab.active {
+            color: var(--primary-color);
+            transform: translateY(-1px);
+        }
+
+        .tab.active::before {
+            opacity: 1;
+        }
+
+        .tab:hover:not(.active) {
+            color: var(--primary-color);
+            background: var(--hover-bg);
+            transform: translateY(-1px);
+        }
+
+        .tab-content {
+            display: none;
+            animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .screenshot {
+            width: 100%;
+            max-width: 800px;
+            margin: 24px auto;
+            display: block;
+            border-radius: var(--border-radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            transition: var(--transition);
+        }
+
+        .screenshot:hover {
+            transform: scale(1.02);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+        }
+
+        .grid {
+            display: grid;
+            gap: 16px;
+            margin: 24px 0;
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        }
+
+        .btn {
+            padding: 16px 20px;
+            border: none;
+            border-radius: var(--border-radius);
+            background: var(--card-bg);
+            color: var(--primary-color);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+            transform-style: preserve-3d;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--accent-color);
+            background: var(--hover-bg);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(0) scale(1);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            background: var(--secondary-bg);
+            color: var(--secondary-color);
+        }
+
+        .btn.primary {
+            background: linear-gradient(135deg, var(--accent-color), #4184e4);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 20px var(--glow-color);
+        }
+
+        .btn.primary:hover:not(:disabled) {
+            box-shadow: 0 8px 32px var(--glow-color);
+            transform: translateY(-3px) scale(1.05);
+        }
+
+        .btn.success {
+            background: linear-gradient(135deg, var(--success-color), #2ea043);
+            border-color: var(--success-color);
+            box-shadow: 0 0 20px var(--success-glow);
+        }
+
+        .btn.success:hover:not(:disabled) {
+            box-shadow: 0 8px 32px var(--success-glow);
+            transform: translateY(-3px) scale(1.05);
+        }
+
+        .btn.warning {
+            background: linear-gradient(135deg, var(--warning-color), #bf8700);
+            border-color: var(--warning-color);
+        }
+
+        .btn.danger {
+            background: linear-gradient(135deg, var(--danger-color), #da3633);
+            border-color: var(--danger-color);
+            box-shadow: 0 0 20px var(--danger-glow);
+        }
+
+        .btn.danger:hover:not(:disabled) {
+            box-shadow: 0 8px 32px var(--danger-glow);
+            transform: translateY(-3px) scale(1.05);
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 24px;
+            border-radius: var(--border-radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            margin-bottom: 24px;
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--accent-color);
+        }
+
+        .card h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            align-items: stretch;
+        }
+
+        .input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--secondary-bg);
+            color: var(--primary-color);
+            font-size: 14px;
+            transition: var(--transition);
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px var(--glow-color);
+            background: var(--card-bg);
+        }
+
+        .input::placeholder {
+            color: var(--secondary-color);
+        }
+
+        .player-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .player-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: var(--secondary-bg);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            transition: var(--transition);
+        }
+
+        .player-item:hover {
+            background: var(--hover-bg);
+            transform: translateX(4px);
+            border-color: var(--accent-color);
+        }
+
+        .checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: var(--accent-color);
+        }
+
+        .player-name {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            animation: fadeIn 0.2s ease;
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: var(--card-bg);
+            padding: 32px;
+            border-radius: var(--border-radius-lg);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-lg);
+            max-width: 400px;
+            width: 90%;
+            animation: modalSlide 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes modalSlide {
+            to {
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .modal h3 {
+            margin-bottom: 16px;
+            color: var(--accent-color);
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .modal-buttons .btn {
+            flex: 1;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-radius: 50%;
+            border-top-color: var(--accent-color);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .network-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: var(--secondary-bg);
+            margin: 12px 0;
+        }
+
+        .network-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+            transition: var(--transition);
+            font-size: 14px;
+        }
+
+        .network-item:last-child {
+            border-bottom: none;
+        }
+
+        .network-item:hover {
+            background: var(--hover-bg);
+            transform: translateX(4px);
+        }
+
+        .network-item.selected {
+            background: var(--accent-color);
+            color: var(--card-bg);
+            font-weight: 500;
+        }
+
+        .password-input {
+            margin-top: 16px;
+        }
+
+        .icon {
+            font-size: 1.2em;
+            margin-right: 8px;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--secondary-bg);
+            border-radius: var(--border-radius);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: var(--border-radius);
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-color);
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+
+            .grid-2,
+            .grid-3 {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+
+            .player-item {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+
+            .modal-content {
+                width: 95%;
+                padding: 24px;
+                margin: 16px;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .btn {
+                padding: 14px 18px;
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .tabs {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Focus indicators for accessibility */
+        .btn:focus,
+        .input:focus,
+        .tab:focus {
+            outline: 2px solid var(--accent-color);
+            outline-offset: 2px;
+        }
+
+        /* Reduced motion for users who prefer it */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            ::before,
+            ::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Shooting Range Control</h1>
+            <div class="status" id="status">
+                <span class="icon">⚡</span>
+                Loading...
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('home')">
+                <span>🏠 Home</span>
+            </button>
+            <button class="tab" onclick="switchTab('players')">
+                <span>👥 Players</span>
+            </button>
+            <button class="tab" onclick="switchTab('games')">
+                <span>🎮 Games</span>
+            </button>
+            <button class="tab" onclick="switchTab('settings')">
+                <span>⚙️ Settings</span>
+            </button>
+        </div>
+
+        <div id="home-tab" class="tab-content active">
+            <img id="screenshot" class="screenshot" 
+                 src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
+                 alt="Live Screenshot">
+            
+            <div class="grid grid-3" id="action-buttons">
+                <!-- Action buttons populated by JavaScript -->
+            </div>
+        </div>
+
+        <div id="players-tab" class="tab-content">
+            <div class="card">
+                <h2>
+                    <span class="icon">👥</span>
+                    Player Management
+                </h2>
+                <div class="input-group">
+                    <input type="text" class="input" id="player-name" 
+                           placeholder="Enter player name..." maxlength="19">
+                    <button class="btn primary" onclick="addPlayer()">
+                        <span class="icon">➕</span>
+                        Add Player
+                    </button>
+                </div>
+                <div class="player-list" id="player-list">
+                    <!-- Players populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <div id="games-tab" class="tab-content">
+            <div class="card">
+                <h2>
+                    <span class="icon">🎮</span>
+                    Available Games
+                </h2>
+                <div class="grid grid-2" id="game-buttons">
+                    <!-- Game buttons populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <div id="settings-tab" class="tab-content">
+            <div class="card">
+                <h2>
+                    <span class="icon">⚙️</span>
+                    System Controls
+                </h2>
+                <div class="grid grid-2">
+                    <button class="btn" onclick="systemAction('close_all')">
+                        <span class="icon">🔄</span>
+                        Close All Games
+                    </button>
+                    <button class="btn primary" onclick="showWiFiModal()">
+                        <span class="icon">📶</span>
+                        WiFi Settings
+                    </button>
+                    <button class="btn success" onclick="checkUpdates()">
+                        <span class="icon">🔄</span>
+                        Check for Updates
+                    </button>
+                    <button class="btn warning" onclick="confirmAction('reboot', 'Reboot System', 'Are you sure you want to reboot the system?')">
+                        <span class="icon">🔄</span>
+                        Reboot System
+                    </button>
+                    <button class="btn danger" onclick="confirmAction('shutdown', 'Shutdown System', 'Are you sure you want to shutdown the system?')">
+                        <span class="icon">⚡</span>
+                        Shutdown System
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title">Confirm Action</h3>
+            <p id="modal-message">Are you sure you want to proceed?</p>
+            <div class="modal-buttons">
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn danger" id="modal-confirm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- WiFi Modal -->
+    <div id="wifi-modal" class="modal">
+        <div class="modal-content">
+            <h3>📶 WiFi Network Settings</h3>
+            <p>Scan and connect to available networks:</p>
+            
+            <div class="loading" id="wifi-loading"></div>
+            
+            <div class="network-list" id="network-list" style="display: none;">
+                <!-- Networks populated by JavaScript -->
+            </div>
+            
+            <div class="password-input" style="display: none;" id="password-section">
+                <input type="password" class="input" id="wifi-password" 
+                       placeholder="Enter network password...">
+            </div>
+            
+            <div class="modal-buttons">
+                <button class="btn" onclick="closeModal()">Cancel</button>
+                <button class="btn primary" onclick="connectToWiFi()" id="connect-btn" style="display: none;">
+                    <span class="icon">📶</span>
+                    Connect
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentState = {};
+        let selectedNetwork = null;
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            updateState();
+            setInterval(updateState, 2000);
+            
+            // Add keyboard shortcuts
+            document.addEventListener('keydown', handleKeyboard);
+        });
+
+        // Keyboard shortcuts
+        function handleKeyboard(e) {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case '1':
+                        e.preventDefault();
+                        switchTab('home');
+                        break;
+                    case '2':
+                        e.preventDefault();
+                        switchTab('players');
+                        break;
+                    case '3':
+                        e.preventDefault();
+                        switchTab('games');
+                        break;
+                    case '4':
+                        e.preventDefault();
+                        switchTab('settings');
+                        break;
+                }
+            }
+        }
+
+        // Tab switching with animations
+        function switchTab(tabName) {
+            const clickedTab = event?.target?.closest('.tab');
+            
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            if (clickedTab) {
+                clickedTab.classList.add('active');
+            } else {
+                // If called programmatically, find the right tab
+                const tabs = ['home', 'players', 'games', 'settings'];
+                const index = tabs.indexOf(tabName);
+                if (index >= 0) {
+                    document.querySelectorAll('.tab')[index].classList.add('active');
+                }
+            }
+
+            // Update tab content with staggered animation
+            document.querySelectorAll('.tab-content').forEach((content, index) => {
+                content.classList.remove('active');
+                setTimeout(() => {
+                    if (content.id === tabName + '-tab') {
+                        content.classList.add('active');
+                    }
+                }, 50);
+            });
+        }
+
+        // Update application state
+        async function updateState() {
+            try {
+                const response = await fetch('/api/state');
+                const data = await response.json();
+                currentState = data;
+
+                // Update status with icon
+                const statusElement = document.getElementById('status');
+                const isGameRunning = data.status !== "No game running yet";
+                statusElement.innerHTML = `
+                    <span class="icon">${isGameRunning ? '🎯' : '⏸️'}</span>
+                    ${data.status}
+                `;
+
+                // Update screenshot
+                if (data.screenshot) {
+                    document.getElementById('screenshot').src = 'data:image/jpeg;base64,' + data.screenshot;
+                }
+
+                // Update components
+                updateActionButtons(data.buttons, data.button_states);
+                updatePlayerList(data.players);
+                updateGameButtons(data.games);
+            } catch (error) {
+                console.error('Error updating state:', error);
+                document.getElementById('status').innerHTML = `
+                    <span class="icon">❌</span>
+                    Connection Error
+                `;
+            }
+        }
+
+        // Update action buttons with expanding effect
+        function updateActionButtons(buttons, states) {
+            const container = document.getElementById('action-buttons');
+            container.innerHTML = '';
+
+            buttons.forEach((buttonText, index) => {
+                const button = document.createElement('button');
+                button.className = `btn ${states[index] ? 'primary' : ''}`;
+                button.innerHTML = `
+                    <span class="icon">${states[index] ? '🎯' : '⭕'}</span>
+                    ${buttonText}
+                `;
+                button.disabled = !states[index];
+                
+                if (states[index]) {
+                    button.onclick = () => actionButton(index + 1);
+                }
+                
+                // Staggered animation
+                button.style.animationDelay = `${index * 0.05}s`;
+                container.appendChild(button);
+            });
+        }
+
+        // Update player list
+        function updatePlayerList(players) {
+            const container = document.getElementById('player-list');
+            container.innerHTML = '';
+
+            players.forEach((player, index) => {
+                const playerDiv = document.createElement('div');
+                playerDiv.className = 'player-item';
+                playerDiv.style.animationDelay = `${index * 0.05}s`;
+                
+                playerDiv.innerHTML = `
+                    <input type="checkbox" class="checkbox" ${player[1] ? 'checked' : ''} 
+                           onchange="togglePlayer(${index})">
+                    <span class="player-name">
+                        <span class="icon">${player[1] ? '✅' : '⭕'}</span>
+                        ${player[0]}
+                    </span>
+                    <button class="btn danger" onclick="deletePlayer(${index})" style="padding: 8px 12px;">
+                        <span class="icon">🗑️</span>
+                        Delete
+                    </button>
+                `;
+                
+                container.appendChild(playerDiv);
+            });
+        }
+
+        // Update game buttons
+        function updateGameButtons(games) {
+            const container = document.getElementById('game-buttons');
+            container.innerHTML = '';
+
+            games.forEach((game, index) => {
+                const button = document.createElement('button');
+                button.className = 'btn success';
+                button.innerHTML = `
+                    <span class="icon">🚀</span>
+                    Start ${game}
+                `;
+                button.onclick = () => startGame(game);
+                button.style.animationDelay = `${index * 0.1}s`;
+                container.appendChild(button);
+            });
+        }
+
+        // Action button click with feedback
+        async function actionButton(buttonId) {
+            try {
+                const response = await fetch(`/api/action/${buttonId}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Visual feedback
+                    event.target.style.transform = 'scale(0.95)';
+                    setTimeout(() => {
+                        event.target.style.transform = '';
+                    }, 150);
+                }
+            } catch (error) {
+                console.error('Error sending action:', error);
+            }
+        }
+
+        // Start game with loading state
+        async function startGame(gameName) {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            
+            button.innerHTML = `
+                <span class="loading"></span>
+                Starting...
+            `;
+            button.disabled = true;
+            
+            try {
+                await fetch(`/api/start_game/${gameName}`);
+                updateState();
+            } catch (error) {
+                console.error('Error starting game:', error);
+            } finally {
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                }, 2000);
+            }
+        }
+
+        // Player management functions
+        async function addPlayer() {
+            const nameInput = document.getElementById('player-name');
+            const name = nameInput.value.trim();
+            
+            if (name) {
+                try {
+                    const response = await fetch('/api/players', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({action: 'add', name: name})
+                    });
+                    
+                    if ((await response.json()).success) {
+                        nameInput.value = '';
+                        updateState();
+                    }
+                } catch (error) {
+                    console.error('Error adding player:', error);
+                }
+            }
+        }
+
+        async function togglePlayer(index) {
+            try {
+                await fetch('/api/players', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'toggle', index: index})
+                });
+            } catch (error) {
+                console.error('Error toggling player:', error);
+            }
+        }
+
+        async function deletePlayer(index) {
+            try {
+                await fetch('/api/players', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'delete', index: index})
+                });
+                updateState();
+            } catch (error) {
+                console.error('Error deleting player:', error);
+            }
+        }
+
+        // System actions
+        async function systemAction(action) {
+            try {
+                await fetch(`/api/system/${action}`);
+                updateState();
+            } catch (error) {
+                console.error('Error with system action:', error);
+            }
+        }
+
+        // Check for updates with enhanced feedback
+        async function checkUpdates() {
+            const button = event.target;
+            const originalHTML = button.innerHTML;
+            
+            button.innerHTML = `
+                <span class="loading"></span>
+                Checking...
+            `;
+            button.disabled = true;
+            
+            try {
+                const response = await fetch('/api/system/check_updates');
+                const data = await response.json();
+                
+                if (data.has_updates) {
+                    confirmAction('update', 'Updates Available', 'New updates are available. Install now?');
+                } else {
+                    showInfo('System Up to Date', 'Your system is running the latest version!');
+                }
+            } catch (error) {
+                console.error('Error checking updates:', error);
+                showInfo('Update Check Failed', 'Unable to check for updates. Please try again later.');
+            } finally {
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+            }
+        }
+
+        // Enhanced confirmation modal
+        function confirmAction(action, title, message) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            document.getElementById('modal-confirm').onclick = () => {
+                systemAction(action);
+                closeModal();
+            };
+            document.getElementById('confirm-modal').style.display = 'block';
+        }
+
+        function showInfo(title, message) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-message').textContent = message;
+            document.getElementById('modal-confirm').style.display = 'none';
+            document.getElementById('confirm-modal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.style.display = 'none';
+            });
+            document.getElementById('modal-confirm').style.display = 'block';
+        }
+
+        // Enhanced WiFi functionality
+        async function showWiFiModal() {
+            document.getElementById('wifi-modal').style.display = 'block';
+            document.getElementById('wifi-loading').style.display = 'block';
+            document.getElementById('network-list').style.display = 'none';
+            document.getElementById('password-section').style.display = 'none';
+            document.getElementById('connect-btn').style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/wifi/scan');
+                const data = await response.json();
+                
+                document.getElementById('wifi-loading').style.display = 'none';
+                document.getElementById('network-list').style.display = 'block';
+                
+                const networkList = document.getElementById('network-list');
+                networkList.innerHTML = '';
+                
+                data.networks.forEach((network, index) => {
+                    const networkDiv = document.createElement('div');
+                    networkDiv.className = 'network-item';
+                    networkDiv.innerHTML = `
+                        <span class="icon">📶</span>
+                        ${network}
+                    `;
+                    networkDiv.onclick = () => selectNetwork(network, networkDiv);
+                    networkDiv.style.animationDelay = `${index * 0.05}s`;
+                    networkList.appendChild(networkDiv);
+                });
+            } catch (error) {
+                console.error('Error scanning WiFi:', error);
+                document.getElementById('wifi-loading').style.display = 'none';
+                const networkList = document.getElementById('network-list');
+                networkList.innerHTML = '<div class="network-item">❌ Failed to scan networks</div>';
+                networkList.style.display = 'block';
+            }
+        }
+
+        function selectNetwork(network, element) {
+            selectedNetwork = network;
+            
+            // Update UI with smooth selection
+            document.querySelectorAll('.network-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            element.classList.add('selected');
+            
+            document.getElementById('password-section').style.display = 'block';
+            document.getElementById('connect-btn').style.display = 'block';
+            
+            // Focus password input
+            setTimeout(() => {
+                document.getElementById('wifi-password').focus();
+            }, 200);
+        }
+
+        async function connectToWiFi() {
+            if (!selectedNetwork) return;
+            
+            const button = document.getElementById('connect-btn');
+            const password = document.getElementById('wifi-password').value;
+            const originalHTML = button.innerHTML;
+            
+            button.innerHTML = `
+                <span class="loading"></span>
+                Connecting...
+            `;
+            button.disabled = true;
+            
+            try {
+                const response = await fetch('/api/wifi/connect', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        ssid: selectedNetwork,
+                        password: password
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showInfo('Connection Successful', `Successfully connected to ${selectedNetwork}!`);
+                } else {
+                    showInfo('Connection Failed', 'Unable to connect to the selected network. Please check your password and try again.');
+                }
+                
+                closeModal();
+            } catch (error) {
+                console.error('Error connecting to WiFi:', error);
+                showInfo('Connection Error', 'An error occurred while connecting to WiFi.');
+            } finally {
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+            }
+        }
+
+        // Enhanced keyboard handling
+        document.getElementById('player-name').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addPlayer();
+            }
+        });
+
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && document.getElementById('wifi-modal').style.display === 'block') {
+                if (selectedNetwork && document.getElementById('wifi-password').value) {
+                    connectToWiFi();
+                }
+            }
+            
+            // Escape key closes modals
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Enhanced modal interactions
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('modal')) {
+                closeModal();
+            }
+        });
+
+        // Add smooth scrolling for better UX
+        document.documentElement.style.scrollBehavior = 'smooth';
+
+        // Add connection status indicator
+        function updateConnectionStatus() {
+            const statusElement = document.getElementById('status');
+            const isOnline = navigator.onLine;
+            
+            if (!isOnline) {
+                statusElement.style.borderColor = 'var(--danger-color)';
+                statusElement.style.backgroundColor = 'rgba(248, 81, 73, 0.1)';
+            } else {
+                statusElement.style.borderColor = 'rgba(88, 166, 255, 0.2)';
+                statusElement.style.backgroundColor = 'rgba(88, 166, 255, 0.1)';
+            }
+        }
+
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+        updateConnectionStatus();
+
+        // Add touch gestures for mobile
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        document.addEventListener('touchstart', function(e) {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        });
+
+        document.addEventListener('touchend', function(e) {
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            
+            // Swipe gestures for tab switching
+            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 100) {
+                const tabs = ['home', 'players', 'games', 'settings'];
+                const currentTab = document.querySelector('.tab.active');
+                const currentIndex = Array.from(document.querySelectorAll('.tab')).indexOf(currentTab);
+                
+                if (deltaX > 0 && currentIndex > 0) {
+                    // Swipe right - previous tab
+                    switchTab(tabs[currentIndex - 1]);
+                } else if (deltaX < 0 && currentIndex < tabs.length - 1) {
+                    // Swipe left - next tab
+                    switchTab(tabs[currentIndex + 1]);
+                }
+            }
+        });
+
+        // Performance optimization: Lazy load screenshots
+        const screenshotImg = document.getElementById('screenshot');
+        const screenshotObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                } else {
+                    entry.target.style.opacity = '0.5';
+                }
+            });
+        });
+
+        screenshotObserver.observe(screenshotImg);
+    </script>
+</body>
+</html>
