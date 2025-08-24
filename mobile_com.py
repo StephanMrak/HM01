@@ -28,6 +28,8 @@ class AppState:
         self.screenshot_cache = None
         self.screenshot_timestamp = 0
         self.wifi_helper = None
+        self.developer_enabled = False  # NEW: Track developer mode
+        self.developer_data = []  # NEW: Store developer data frames
 
     def get_wifi_helper(self):
         if self.wifi_helper is None:
@@ -98,8 +100,10 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
         game_module = __import__(gamefile)
         game_process = multiprocessing.get_context("fork").Process(target=game_module.main)
         game_process.start()
+        # NEW: Pass developer mode flag when starting hardware communication
         receiver, processor, plotter = hardware_com_micro.start(
-            plot=False, process=True, debug=False, filename="", threshold=200, mode=1
+            plot=False, process=True, debug=False, filename="", threshold=220, mode=1, 
+            enable_developer=app_state.developer_enabled
         )
         return [game_process, receiver, processor]
 
@@ -138,6 +142,14 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
                                 app_state.action_buttons[i] = "no function"
                                 app_state.button_states[i] = False
 
+                # NEW: Update developer data if enabled
+                if app_state.developer_enabled:
+                    new_data = hardware_com_micro.get_developer_data()
+                    if new_data:
+                        # Keep only the last 5 frames
+                        app_state.developer_data.extend(new_data)
+                        app_state.developer_data = app_state.developer_data[-5:]
+
                 time.sleep(0.5)
             except Exception as e:
                 print(f"Background update error: {e}")
@@ -168,7 +180,9 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
             'players': players,
             'games': gamefiles,
             'screenshot': app_state.screenshot_cache,
-            'screenshot_timestamp': app_state.screenshot_timestamp
+            'screenshot_timestamp': app_state.screenshot_timestamp,
+            'developer_enabled': app_state.developer_enabled,  # NEW
+            'developer_data': app_state.developer_data  # NEW
         })
 
     @app.route('/api/action/<button_id:int>')
@@ -220,6 +234,18 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
 
         return {'success': False}
 
+    # NEW: Developer mode endpoints
+    @app.route('/api/developer/toggle')
+    def toggle_developer():
+        app_state.developer_enabled = not app_state.developer_enabled
+        app_state.developer_data = []  # Clear data when toggling
+        return {'success': True, 'enabled': app_state.developer_enabled}
+
+    @app.route('/api/developer/clear')
+    def clear_developer_data():
+        app_state.developer_data = []
+        return {'success': True}
+
     @app.route('/api/system/<action>')
     def system_action(action):
         if action == 'close_all':
@@ -270,4 +296,3 @@ def mobile_com(threadname, path2, gamefiles, backgroundqueue, debug_flag):
 
     # Start server
     run(app, host='0.0.0.0', port=8081, debug=debug_flag, server='wsgiref')
-

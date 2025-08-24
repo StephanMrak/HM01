@@ -16,11 +16,13 @@
             --success-color: #3fb950;
             --warning-color: #d29922;
             --danger-color: #f85149;
+            --developer-color: #8b5cf6;
             --border-color: #30363d;
             --hover-bg: #262c36;
             --glow-color: rgba(88, 166, 255, 0.4);
             --success-glow: rgba(63, 185, 80, 0.4);
             --danger-glow: rgba(248, 81, 73, 0.4);
+            --developer-glow: rgba(139, 92, 246, 0.4);
             --border-radius: 8px;
             --border-radius-lg: 12px;
             --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -135,6 +137,10 @@
             opacity: 0;
             transition: var(--transition);
             border-radius: var(--border-radius);
+        }
+
+        .tab.developer::before {
+            background: var(--developer-color);
         }
 
         .tab span {
@@ -294,6 +300,17 @@
             transform: translateY(-3px) scale(1.05);
         }
 
+        .btn.developer {
+            background: linear-gradient(135deg, var(--developer-color), #7c3aed);
+            border-color: var(--developer-color);
+            box-shadow: 0 0 20px var(--developer-glow);
+        }
+
+        .btn.developer:hover:not(:disabled) {
+            box-shadow: 0 8px 32px var(--developer-glow);
+            transform: translateY(-3px) scale(1.05);
+        }
+
         .card {
             background: var(--card-bg);
             padding: 24px;
@@ -383,6 +400,188 @@
             flex: 1;
             font-size: 14px;
             font-weight: 500;
+        }
+
+        /* Developer Tab Styles */
+        .developer-controls {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            align-items: center;
+        }
+
+        .developer-status {
+            padding: 8px 16px;
+            border-radius: var(--border-radius);
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .developer-status.enabled {
+            background: rgba(139, 92, 246, 0.2);
+            color: var(--developer-color);
+            border: 1px solid var(--developer-color);
+        }
+
+        .developer-status.disabled {
+            background: var(--secondary-bg);
+            color: var(--secondary-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .data-frames {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .data-frame {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-lg);
+            padding: 20px;
+            transition: var(--transition);
+        }
+
+        .data-frame:hover {
+            border-color: var(--developer-color);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow);
+        }
+
+        .frame-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .chart-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .zoom-instructions {
+            font-size: 11px;
+            color: var(--secondary-color);
+            font-style: italic;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        .frame-timestamp {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 12px;
+            color: var(--secondary-color);
+            background: var(--card-bg);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .position-info {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .position-valid {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .position-valid.valid {
+            background: rgba(63, 185, 80, 0.2);
+            color: var(--success-color);
+        }
+
+        .position-valid.invalid {
+            background: rgba(248, 81, 73, 0.2);
+            color: var(--danger-color);
+        }
+
+        .position-coords {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 14px;
+            color: var(--primary-color);
+        }
+
+        .channel-data {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .channel {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 12px;
+        }
+
+        .channel-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--secondary-color);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .channel-samples {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 11px;
+            color: var(--primary-color);
+            line-height: 1.3;
+            max-height: 100px;
+            overflow-y: auto;
+            word-break: break-all;
+        }
+
+        /* Simple SVG plot styles */
+        .simple-plot {
+            width: 100%;
+            height: 150px;
+            background: var(--secondary-bg);
+            border-radius: var(--border-radius);
+            margin-top: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .plot-line {
+            fill: none;
+            stroke-width: 2;
+        }
+
+        .plot-grid {
+            stroke: var(--border-color);
+            stroke-width: 0.5;
+        }
+
+        .plot-text {
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 10px;
+            fill: var(--secondary-color);
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--secondary-color);
+            background: var(--secondary-bg);
+            border-radius: var(--border-radius-lg);
+            border: 2px dashed var(--border-color);
+        }
+
+        .no-data .icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+            display: block;
         }
 
         .modal {
@@ -530,7 +729,7 @@
                 grid-template-columns: repeat(2, 1fr);
             }
 
-            .input-group {
+            .input-group, .developer-controls {
                 flex-direction: column;
             }
 
@@ -552,6 +751,15 @@
             .btn {
                 padding: 14px 18px;
                 font-size: 14px;
+            }
+
+            .channel-data {
+                grid-template-columns: 1fr;
+            }
+
+            .frame-header {
+                flex-direction: column;
+                align-items: flex-start;
             }
         }
 
@@ -604,6 +812,9 @@
             </button>
             <button class="tab" onclick="switchTab('settings')">
                 <span>⚙️ Settings</span>
+            </button>
+            <button class="tab developer" onclick="switchTab('developer')">
+                <span>🔧 Developer</span>
             </button>
         </div>
 
@@ -676,6 +887,40 @@
                         <span class="icon">⚡</span>
                         Shutdown System
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="developer-tab" class="tab-content">
+            <div class="card">
+                <h2>
+                    <span class="icon">🔧</span>
+                    Developer Data Monitor
+                </h2>
+                
+                <div class="developer-controls">
+                    <button class="btn developer" onclick="toggleDeveloperMode()" id="dev-toggle-btn">
+                        <span class="icon">🔧</span>
+                        Enable Developer Mode
+                    </button>
+                    
+                    <div class="developer-status disabled" id="dev-status">
+                        <span class="icon">⭕</span>
+                        Disabled
+                    </div>
+                    
+                    <button class="btn" onclick="clearDeveloperData()" id="dev-clear-btn" style="display: none;">
+                        <span class="icon">🗑️</span>
+                        Clear Data
+                    </button>
+                </div>
+
+                <div id="developer-data-container">
+                    <div class="no-data">
+                        <span class="icon">📊</span>
+                        <h3>No Developer Data</h3>
+                        <p>Enable developer mode and start a game to see SPI data frames and position estimates.</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -753,6 +998,10 @@
                         e.preventDefault();
                         switchTab('settings');
                         break;
+                    case '5':
+                        e.preventDefault();
+                        switchTab('developer');
+                        break;
                 }
             }
         }
@@ -770,7 +1019,7 @@
                 clickedTab.classList.add('active');
             } else {
                 // If called programmatically, find the right tab
-                const tabs = ['home', 'players', 'games', 'settings'];
+                const tabs = ['home', 'players', 'games', 'settings', 'developer'];
                 const index = tabs.indexOf(tabName);
                 if (index >= 0) {
                     document.querySelectorAll('.tab')[index].classList.add('active');
@@ -812,6 +1061,7 @@
                 updateActionButtons(data.buttons, data.button_states);
                 updatePlayerList(data.players);
                 updateGameButtons(data.games);
+                updateDeveloperTab(data.developer_enabled, data.developer_data);
             } catch (error) {
                 console.error('Error updating state:', error);
                 document.getElementById('status').innerHTML = `
@@ -888,6 +1138,192 @@
                 button.style.animationDelay = `${index * 0.1}s`;
                 container.appendChild(button);
             });
+        }
+
+        // NEW: Update developer tab
+        function updateDeveloperTab(enabled, data) {
+            const toggleBtn = document.getElementById('dev-toggle-btn');
+            const status = document.getElementById('dev-status');
+            const clearBtn = document.getElementById('dev-clear-btn');
+            const container = document.getElementById('developer-data-container');
+
+            // Update toggle button and status
+            if (enabled) {
+                toggleBtn.innerHTML = `
+                    <span class="icon">🔧</span>
+                    Disable Developer Mode
+                `;
+                status.className = 'developer-status enabled';
+                status.innerHTML = `
+                    <span class="icon">✅</span>
+                    Enabled
+                `;
+                clearBtn.style.display = 'block';
+            } else {
+                toggleBtn.innerHTML = `
+                    <span class="icon">🔧</span>
+                    Enable Developer Mode
+                `;
+                status.className = 'developer-status disabled';
+                status.innerHTML = `
+                    <span class="icon">⭕</span>
+                    Disabled
+                `;
+                clearBtn.style.display = 'none';
+            }
+
+            // Update data display
+            if (!enabled || !data || data.length === 0) {
+                container.innerHTML = `
+                    <div class="no-data">
+                        <span class="icon">📊</span>
+                        <h3>No Developer Data</h3>
+                        <p>${enabled ? 'Start a game to see SPI data frames and position estimates.' : 'Enable developer mode and start a game to see SPI data frames and position estimates.'}</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = '<div class="data-frames"></div>';
+                const framesContainer = container.querySelector('.data-frames');
+                
+                // Show latest 5 frames, newest first
+                const latestFrames = data.slice(-5).reverse();
+                
+                latestFrames.forEach((frame, index) => {
+                    const frameDiv = document.createElement('div');
+                    frameDiv.className = 'data-frame';
+                    frameDiv.style.animationDelay = `${index * 0.1}s`;
+                    
+                    const timestamp = new Date(frame.timestamp * 1000).toLocaleTimeString();
+                    
+                    frameDiv.innerHTML = `
+                        <div class="frame-header">
+                            <div class="frame-timestamp">📅 ${timestamp}</div>
+                            <div class="position-info">
+                                <div class="position-valid ${frame.position_valid ? 'valid' : 'invalid'}">
+                                    ${frame.position_valid ? '✅ Valid' : '❌ Invalid'}
+                                </div>
+                                ${frame.position_valid ? `
+                                    <div class="position-coords">
+                                        📍 X: ${frame.position_x.toFixed(3)}m, Y: ${frame.position_y.toFixed(3)}m
+                                    </div>
+                                    <div class="position-coords">
+                                        📊 Residual: ${frame.residual.toFixed(6)}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                        <div class="channel-data">
+                            <div class="channel">
+                                <div class="channel-title">Channel 1</div>
+                                <div class="channel-samples">${frame.ch1.slice(0, 20).map(v => v.toFixed(3)).join(', ')}...</div>
+                                ${createSimplePlot(frame.ch1, '#ff6b6b')}
+                            </div>
+                            <div class="channel">
+                                <div class="channel-title">Channel 2</div>
+                                <div class="channel-samples">${frame.ch2.slice(0, 20).map(v => v.toFixed(3)).join(', ')}...</div>
+                                ${createSimplePlot(frame.ch2, '#4ecdc4')}
+                            </div>
+                            <div class="channel">
+                                <div class="channel-title">Channel 3</div>
+                                <div class="channel-samples">${frame.ch3.slice(0, 20).map(v => v.toFixed(3)).join(', ')}...</div>
+                                ${createSimplePlot(frame.ch3, '#45b7d1')}
+                            </div>
+                            <div class="channel">
+                                <div class="channel-title">Channel 4</div>
+                                <div class="channel-samples">${frame.ch4.slice(0, 20).map(v => v.toFixed(3)).join(', ')}...</div>
+                                ${createSimplePlot(frame.ch4, '#f9ca24')}
+                            </div>
+                        </div>
+                    `;
+                    
+                    framesContainer.appendChild(frameDiv);
+                });
+            }
+        }
+
+        // NEW: Create simple SVG plot
+        function createSimplePlot(data, color) {
+            if (!data || data.length === 0) return '<div class="simple-plot">No data</div>';
+            
+            const width = 280;
+            const height = 120;
+            const margin = 20;
+            const plotWidth = width - 2 * margin;
+            const plotHeight = height - 2 * margin;
+            
+            // Find min/max for scaling
+            const minY = Math.min(...data);
+            const maxY = Math.max(...data);
+            const rangeY = maxY - minY || 1; // Avoid division by zero
+            
+            // Create path points
+            const points = data.map((value, index) => {
+                const x = margin + (index / (data.length - 1)) * plotWidth;
+                const y = margin + (1 - (value - minY) / rangeY) * plotHeight;
+                return `${x.toFixed(1)},${y.toFixed(1)}`;
+            }).join(' L');
+            
+            // Create grid lines
+            const gridLines = [];
+            for (let i = 0; i <= 4; i++) {
+                const y = margin + (i / 4) * plotHeight;
+                gridLines.push(`<line class="plot-grid" x1="${margin}" y1="${y}" x2="${width - margin}" y2="${y}"/>`);
+            }
+            for (let i = 0; i <= 4; i++) {
+                const x = margin + (i / 4) * plotWidth;
+                gridLines.push(`<line class="plot-grid" x1="${x}" y1="${margin}" x2="${x}" y2="${height - margin}"/>`);
+            }
+            
+            return `
+                <svg class="simple-plot" viewBox="0 0 ${width} ${height}">
+                    ${gridLines.join('')}
+                    <path class="plot-line" stroke="${color}" d="M${points}"/>
+                    <text class="plot-text" x="${margin}" y="${height - 5}">${minY.toFixed(2)}</text>
+                    <text class="plot-text" x="${margin}" y="15">${maxY.toFixed(2)}</text>
+                    <text class="plot-text" x="${width - 30}" y="${height - 5}">samples</text>
+                </svg>
+            `;
+        }
+
+        // NEW: Developer mode functions
+        async function toggleDeveloperMode() {
+            try {
+                const response = await fetch('/api/developer/toggle');
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Visual feedback
+                    const button = document.getElementById('dev-toggle-btn');
+                    button.style.transform = 'scale(0.95)';
+                    setTimeout(() => {
+                        button.style.transform = '';
+                    }, 150);
+                    
+                    updateState(); // Refresh to get new state
+                }
+            } catch (error) {
+                console.error('Error toggling developer mode:', error);
+            }
+        }
+
+        async function clearDeveloperData() {
+            try {
+                const response = await fetch('/api/developer/clear');
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Visual feedback
+                    const button = document.getElementById('dev-clear-btn');
+                    button.style.transform = 'scale(0.95)';
+                    setTimeout(() => {
+                        button.style.transform = '';
+                    }, 150);
+                    
+                    updateState(); // Refresh to get new state
+                }
+            } catch (error) {
+                console.error('Error clearing developer data:', error);
+            }
         }
 
         // Action button click with feedback
@@ -1206,7 +1642,7 @@
             
             // Swipe gestures for tab switching
             if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 100) {
-                const tabs = ['home', 'players', 'games', 'settings'];
+                const tabs = ['home', 'players', 'games', 'settings', 'developer'];
                 const currentTab = document.querySelector('.tab.active');
                 const currentIndex = Array.from(document.querySelectorAll('.tab')).indexOf(currentTab);
                 

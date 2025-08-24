@@ -18,8 +18,11 @@ SPI_MODE = 0
 FREQUENCY = 500000 
 REF_VOLTAGE = 3.3
 
+# Global developer data queue - simple addition for data sharing
+developer_data_queue = None
+
 class ReceiverProcess(multiprocessing.Process):
-        def __init__(self, plot_queue, plot, threshold, mode, debug):
+        def __init__(self, plot_queue, plot, threshold, mode, debug, dev_queue=None):
             super().__init__()
             self.plot_queue = plot_queue
             self.plot = plot
@@ -28,6 +31,7 @@ class ReceiverProcess(multiprocessing.Process):
             self.debug = debug
             self.spi = None
             self.gpio_request = None
+            self.dev_queue = dev_queue  # Add developer data queue
             
             # Import heavy libraries in __init__ to avoid import overhead during processing
             import numpy as np
@@ -73,6 +77,26 @@ class ReceiverProcess(multiprocessing.Process):
                 # All imports are already done in __init__, use instance variables for speed
                 # Process the data to get position estimate
                 isValid, positionEstimate, minNormRes = self.positionEstimator.estimatePosition((ch1, ch2, ch3, ch4, FREQUENCY))
+                
+                # NEW: Send developer data to queue if enabled
+                if self.dev_queue is not None:
+                    try:
+                        dev_data = {
+                            'timestamp': time.time(),
+                            'ch1': ch1.tolist(),
+                            'ch2': ch2.tolist(),
+                            'ch3': ch3.tolist(),
+                            'ch4': ch4.tolist(),
+                            'position_valid': bool(isValid),
+                            'position_x': float(positionEstimate[0]) if isValid else None,
+                            'position_y': float(positionEstimate[1]) if isValid else None,
+                            'residual': float(minNormRes) if isValid else None
+                        }
+                        # Non-blocking put to avoid slowdown
+                        if not self.dev_queue.full():
+                            self.dev_queue.put_nowait(dev_data)
+                    except:
+                        pass  # Don't let developer logging interfere with main functionality
                 
                 if isValid:
                     d_lenght = 0.341
@@ -154,8 +178,8 @@ class ReceiverProcess(multiprocessing.Process):
 
                 tx_buf = [0] * (DATA_SIZE)
                 tx_buf[0] = self.threshold 
-                if self.mode == 1:
-                    tx_buf[1] = 1
+                
+                tx_buf[1] =self.mode 
                     
                 with gpiod.request_lines(
                     GPIO_CHIP,
@@ -204,7 +228,7 @@ class ReceiverProcess(multiprocessing.Process):
                 print("Receiver exiting...")
 
 class NonLinuxReceiverProcess(multiprocessing.Process):
-    def __init__(self, plot_queue, plot, threshold, mode, debug):
+    def __init__(self, plot_queue, plot, threshold, mode, debug, dev_queue=None):
         super().__init__()
         
     def terminate(self):
@@ -312,22 +336,30 @@ def load_and_enqueue_data(npy_file, receiver_process, plot_queue, plot):
             
     print(f"Data from {npy_file} processed directly.")
 
-def start(plot=False, process=True, debug=False, filename="", threshold=200, mode=1):
+def start(plot=False, process=True, debug=False, filename="", threshold=200, mode=1, enable_developer=False):
     """
     Start the SPI data processing system non-blocking.
     
     Returns:
         Processes that can be terminated with .terminate()
     """
+    global developer_data_queue
+    
     plot_queue = multiprocessing.Queue(maxsize=10) if plot else None  # Reduced from 100
+
+    # NEW: Create developer data queue if enabled
+    if enable_developer:
+        developer_data_queue = multiprocessing.Queue(maxsize=10)  # Keep last 10 frames
+    else:
+        developer_data_queue = None
 
     # Create process instances
     print(f"Starting sampleboard in mode: {mode} and threshold {threshold}")
     
     if sys.platform.startswith("linux"):
-        receiver = ReceiverProcess(plot_queue, plot, threshold, mode, debug)
+        receiver = ReceiverProcess(plot_queue, plot, threshold, mode, debug, developer_data_queue)
     else:
-        receiver = NonLinuxReceiverProcess(plot_queue, plot, threshold, mode, debug)
+        receiver = NonLinuxReceiverProcess(plot_queue, plot, threshold, mode, debug, developer_data_queue)
     plotter = PlotterProcess(plot_queue, plot) if plot else None
 
     # Start processes
@@ -362,6 +394,22 @@ def start(plot=False, process=True, debug=False, filename="", threshold=200, mod
 
     return receiver, None, plotter  # Return None for the removed processor
 
+def get_developer_data():
+    """Get developer data from the queue - NEW function for webserver"""
+    global developer_data_queue
+    if developer_data_queue is None:
+        return []
+    
+    data_frames = []
+    try:
+        # Get all available data (up to 10 items)
+        while not developer_data_queue.empty() and len(data_frames) < 10:
+            data_frames.append(developer_data_queue.get_nowait())
+    except:
+        pass
+    
+    return data_frames
+
 def stop_processes(*processes):
     """
     Utility function to stop all processes gracefully.
@@ -387,6 +435,7 @@ def main():
     parser.add_argument("-f", type=str, default="", help="File name to load data from (optional)")
     parser.add_argument("-t", type=int, default=200, choices=range(10, 255), help="Threshold value. Below 128 will check for minima, above for maxima (default: 200, min: 10, max: 255)")
     parser.add_argument("-m", type=int, default=0, choices=range(0, 2), help="Mode 0 for unfiltered threshold, Mode 1 for filtered threshold")
+    parser.add_argument("--dev", action="store_true", help="Enable developer data logging")
     args = parser.parse_args()
 
     def cleanup(signum, frame):
@@ -398,7 +447,7 @@ def main():
     signal.signal(signal.SIGTERM, cleanup)
 
     # Start the processes (non-blocking)
-    result = start(args.p, args.r, args.d, args.f, args.t, args.m)
+    result = start(args.p, args.r, args.d, args.f, args.t, args.m, args.dev)
     if result is None:
         sys.exit(1)
         
