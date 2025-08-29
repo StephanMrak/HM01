@@ -621,7 +621,7 @@ class Game:
         pygame.quit()
 
 
-# --------- ENTRY POINT (for external launcher) ----------
+# --------- lol ENTRY POINT (for external launcher) ----------
 def main():
     Game().run()
 
