@@ -1,679 +1,276 @@
+# shootup_reaction_optimized.py — Reaction-Mode mit Death-Animation (Pi Zero 2 optimiert)
+import os, random, pygame
+
+# ---- optional: hmsysteme (RGB, Treffer-Input) --------------------------------
+try:
+    import hmsysteme
+    HAS_HM = True
+except Exception:
+    HAS_HM = False
+
+def hm_put_buttons(names):
+    if HAS_HM and hasattr(hmsysteme, "put_button_names"):
+        try: hmsysteme.put_button_names(names)
+        except Exception: pass
+
+def hm_rgb(rgb):
+    if HAS_HM and hasattr(hmsysteme, "put_rgbcolor"):
+        try: hmsysteme.put_rgbcolor(rgb)
+        except Exception: pass
+
+def hm_hit_detected():
+    return HAS_HM and hasattr(hmsysteme, "hit_detected") and hmsysteme.hit_detected()
+
+def hm_get_pos():
+    if HAS_HM and hasattr(hmsysteme, "get_pos"):
+        try: return hmsysteme.get_pos()
+        except Exception: return None
+    return None
+
+# ---- Spiel-Config --------------------------------------------------------------
+FPS_LIMIT      = 30
+SPAWN_MIN_MS   = 1000   # 1 s
+SPAWN_MAX_MS   = 5000   # 5 s
+DEATH_FPS      = 12     # Death-Animation (Frames pro Sekunde)
+DEATH_FALLBACK = 220    # ms – falls kein Death-Ordner existiert (kurzes „Zucken“)
+
+ASSET_ROOT = os.path.dirname(os.path.realpath(__file__))
+
+# Basis-Sprite pro Gegner + Ordner
+ENEMIES = [
+    ("Cow",           "pics/ShootUP/Cow",          "1.png"),   # kein Death-Ordner vorhanden? -> Fallback
+    ("Mauler",        "pics/ShootUP/Mauler",       "0.png"),
+    ("EarthElement",  "pics/ShootUP/EarthElement", "0x.png"),
+    ("SwampCreature", "pics/ShootUP/SwampCreature","0.png"),
+    ("Bullrog",       "pics/ShootUP/Ballrog",      "0.png"),
+    ("Mercenary",     "pics/ShootUP/Mercenary",    "0.png"),
+    ("Icemonster",    "pics/ShootUP/Icemonster",   "0.png"),
+]
+
+# Fixe Positionen (passen zu deinem Hintergrund)
+POSITIONS = [
+    (800,150), (750,210), (400,290),
+    (650,250), (650,150), (300,150), (750,400)
+]
+
+# ---- Hilfsfunktionen -----------------------------------------------------------
+def load_image(path):
+    return pygame.image.load(path).convert_alpha()
+
+def list_death_frames(folder):
+    """Gibt sortierte Dateipfade für Death-Frames zurück (falls vorhanden)."""
+    death_dir = os.path.join(ASSET_ROOT, folder, "Death")
+    if not os.path.isdir(death_dir):
+        return []
+    files = [f for f in os.listdir(death_dir) if f.lower().endswith(".png")]
+    # numerisch sortieren (Dateien heißen z.B. 1.png, 3.png, 10.png, ...)
+    def key(f):
+        name = os.path.splitext(f)[0]
+        try:
+            return int("".join(ch for ch in name if ch.isdigit()) or 0)
+        except ValueError:
+            return name
+    files.sort(key=key)
+    return [os.path.join(death_dir, f) for f in files]
 
 def main():
-    global mausx,mausy, ipicture_speed,xColourCont,iColourCount
-    global offsetmauler,xhit_mauler,imauler,xmauler_done,imauler2
-    global offsetCow,xhit_Cow,iCow,xCow_done,iCow2
-    global offsetEarthElement,xhit_EarthElement,iEarthElement,xEarthElement_done,iEarthElement2
-    global offsetSwampCreature,xhit_SwampCreature,iSwampCreature,xSwampCreature_done,iSwampCreature2
-    global offsetBullrog,xhit_Bullrog,iBullrog,xBullrog_done,iBullrog2
-    global offsetMercenary,xhit_Mercenary,iMercenary,xMercenary_done,iMercenary2
-    global offsetIcemonster,xhit_Icemonster,iIcemonster,xIcemonster_done,iIcemonster2
-    global iTime,iFPS,xGameOver,xStartCounter,listEnemy,xNewTarget,iActiveEnemy,xStartGame,xHit,iTimerNext,iCountNext,iCountTmp,iActivePosi,listPosition
-    global xyPosi,xyPosi1,xyPosi2,xyPosi3,xyPosi4,xyPosi5,xyPosi6,xyPosi7
-    global PlayerScore,iScoreCounter,iTimeScore
-    global txtScore_y,get_yposi,iScoreVisible,txt_ScoreShot,iScoreCalculated
-    global iCountScoreTimer,xCountScoreTimer,xtmpHit,xInit
-    global timeRndPopUp,iTimeRnd,xInitGame,InitTimeRndPopUp,timeInitPopup,iInitTimePopup
-    import pygame
-    import time
-    import hmsysteme
-    import os
-    import platform
-    import random
-    import pygame.freetype
-    hmsysteme.put_button_names(["RESET", "+", "SCORE BOARD", "<", "Enter", ">", "BACK", "-", "BLIND SHOT"])
-    print(platform.uname())
     pygame.init()
+    info = pygame.display.Info()
+    SIZE = (info.current_w, info.current_h)  # z.B. 1366x768
 
-    #size = [1366, 768]
-    size = hmsysteme.get_size()
+    flags = pygame.FULLSCREEN | pygame.SCALED
+    try:
+        screen = pygame.display.set_mode(SIZE, flags, vsync=1)
+    except TypeError:
+        screen = pygame.display.set_mode(SIZE, flags)
 
-    #Get Playernames
-    names = hmsysteme.get_playernames()
-    if not names:
-        names = ["Stephan", "Marion", "Flori", "Peter Mafai"]
-
-    path = os.path.realpath(__file__)
-    #    path = path.replace('Prestige\Prestige.py', '')
-    if 'Linux' in platform.uname():
-        path = path.replace('ShootUP.py', '')
-    else:
-        path = path.replace('ShootUP.py', '')
-
-    #screen = pygame.display.set_mode(size)
-    screen=pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-
+    pygame.display.set_caption("ShootUP – Reaction Mode (Optimized)")
     clock = pygame.time.Clock()
-    pygame.display.set_caption("ShootUP")
 
-    #Pics
-    Diabolo = pygame.image.load(os.path.join(path,"pics/ShootUP/Schuss.png"))
-    pic_background = pygame.image.load(os.path.join(path, "pics/ShootUP/backgroundx.jpg"))
-    pic_Overlay1 = pygame.image.load(os.path.join(path, "pics/ShootUP/Overlay1.png"))
-    pic_Overlay2 = pygame.image.load(os.path.join(path, "pics/ShootUP/Overlay2.png"))
+    # Hintergrund/Overlay EINMALIG auf Bildschirmgröße skalieren
+    bg_raw      = load_image(os.path.join(ASSET_ROOT, "pics/ShootUP/backgroundx.jpg"))
+    overlay_raw = load_image(os.path.join(ASSET_ROOT, "pics/ShootUP/Overlay1.png"))
+    bg      = pygame.transform.smoothscale(bg_raw, SIZE)
+    overlay = pygame.transform.smoothscale(overlay_raw, SIZE)
 
-    #Enemy
-    pic_Mauler = pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/0.png"))
-    pic_Mauler_death = [pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/0.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/1.png")),
-                        pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/2.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/3.png")),
-                        pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/4.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/5.png")),
-                        pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/6.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/7.png")),
-                        pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/8.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/9.png")),
-                        pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/10.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/11.png")),
-                        pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/12.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mauler/Death/13.png"))]
+    # Cross
+    cross = load_image(os.path.join(ASSET_ROOT, "pics/ShootUP/Schuss.png"))
+    cross_mask = pygame.mask.from_surface(cross)
+    cross_show_until = 0
+    last_cross_pos = None
 
-    pic_Cow =     [pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/1.png")), pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/2.png")),
-                     pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/3.png")), pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/4.png")),
-                     pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/5.png")), pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/6.png")),
-                     pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/7.png")), pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/8.png")),
-                     pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/9.png")), pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/10.png")),
-                     pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/11.png")), pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/12.png")),
-                     pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/13.png")), pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/14.png")),
-                     pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/15.png")), pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/16.png")),
-                     pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/17.png")), pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/18.png")),
-                    pygame.image.load(os.path.join(path,"pics/ShootUP/Cow/18.png"))]
+    # Gegner: Basissprite + Maske (einmal)
+    enemy_surfs, enemy_masks = [], []
+    for _, folder, file in ENEMIES:
+        surf = load_image(os.path.join(ASSET_ROOT, folder, file))
+        enemy_surfs.append(surf)
+        enemy_masks.append(pygame.mask.from_surface(surf))
 
-    pic_EarthElement =  pygame.image.load(os.path.join(path,"pics/ShootUP/EarthElement/0x.png"))
-    pic_EarthElement_death =    [pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/0.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/1.png")),
-                                 pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/2.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/3.png")),
-                                 pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/4.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/5.png")),
-                                 pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/6.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/7.png")),
-                                 pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/8.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/9.png")),
-                                 pygame.image.load(os.path.join(path, "pics/ShootUP/EarthElement/Death/10.png"))]
+    # Death-Cache (lazy)
+    death_cache = {}  # enemy_index -> [surfaces]
 
-    pic_SwampCreature = pygame.image.load(os.path.join(path,"pics/ShootUP/SwampCreature/0.png"))
-    pic_SwampCreature_death =   [pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/0.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/1.png")),
-                            pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/2.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/3.png")),
-                            pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/4.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/5.png")),
-                            pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/6.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/7.png")),
-                            pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/8.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/9.png")),
-                            pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/10.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/11.png")),
-                            pygame.image.load(os.path.join(path, "pics/ShootUP/SwampCreature/Death/12.png"))]
+    # Reihenfolgen
+    remaining = list(range(len(ENEMIES)))
+    random.shuffle(remaining)
+    pos_pool = list(range(len(POSITIONS)))
+    random.shuffle(pos_pool)
 
-    pic_Bullrog = pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/0.png"))
-    pic_Bullrog_death = [pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/0.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/1.png")),
-                         pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/2.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/3.png")),
-                         pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/4.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/5.png")),
-                         pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/6.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/7.png")),
-                         pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/8.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/9.png")),
-                         pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/10.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/11.png")),
-                         pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/12.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/13.png")),
-                         pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/14.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/15.png")),
-                         pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/16.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/17.png")),
-                         pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/18.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Ballrog/Death/19.png"))]
+    # State
+    EVT_SPAWN = pygame.USEREVENT + 1
+    def schedule_next_spawn():
+        if remaining:
+            pygame.time.set_timer(EVT_SPAWN, random.randint(SPAWN_MIN_MS, SPAWN_MAX_MS), loops=1)
 
-    pic_Mercenary = pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/0.png"))
-    pic_Mercenary_death = [pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/1.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/2.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/3.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/4.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/5.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/6.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/7.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/8.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/9.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/10.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Mercenary/Death/11.png"))]
-    pic_Icemonster = pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/0.png"))
-    pic_Icemonster_death = [pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/1.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/2.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/3.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/4.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/5.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/6.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/7.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/8.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/9.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/10.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/11.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/12.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/13.png")), pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/14.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/15.png")),pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/16.png")),
-                           pygame.image.load(os.path.join(path, "pics/ShootUP/Icemonster/Death/17.png"))]
+    current_enemy = None
+    current_pos   = None
+    current_mask  = None
+    spawn_ticks   = 0
+    waiting_for_click = False
 
-    ############Variablen###########
-    BLACK = (0, 0, 0)
-    framerate = 30
-    mausx = 0
-    mausy = 0
-    ipicture_speed = 2
-    GAME_FONT = pygame.font.SysFont("Times", 60)
-    SCORE_FONT = pygame.font.SysFont("Comic Sans MS", 40,True)
-    txt_ScoreShot = SCORE_FONT.render("+10", True, (0, 240, 0))
-    hit_for_screenshot = False
-    offsetDiabolo = 9
-    iTime = 20
-    iFPS = 0
-    xGameOver = False
-    xStartCounter = False
-    #1=Cow;2=Mauler;3=EarthElement;4=SwampCreature;5=Bullrog;6=Mercenary;7=Icemonster
-    listEnemy = [1,2,3,4,5,6,7]
-    iActiveEnemy = 0
-    listPosition = [1,2,3,4,5,6]
-    iActivePosi = 0
-    xyPosi = [0,0]
-    xyPosi1 = [800,150]
-    xyPosi2 = [750,210]
-    xyPosi3 = [400,290]
-    xyPosi4 = [650,250]
-    xyPosi5 = [650,150]
-    xyPosi6 = [300,150]
-    xyPosi7 = [750,400]
-    xNewTarget = False
-    xStartGame = False
-    xHit = False
-    iTimerNext = 30
-    iCountNext = 0
-    iCountTmp = 0
-    PlayerScore = 0
-    iScoreCounter = 0
-    txtScore_y = 0
-    get_yposi = False
-    iScoreVisible = 0
-    xColourCont = False
-    iColourCount = 0
-    iCountScoreTimer = 0
-    xCountScoreTimer = False
-    iTimeScore = 0
-    xtmpHit = False
-    xInit = True
-    InitTimeRndPopUp = [90,120,150,180]
-    timeRndPopUp = [100,110,120,130,140,150]
-    iTimeRnd = 0
-    xInitGame = True
-    timeInitPopup = 0
-    iInitTimePopup = 0
-    iScoreCalculated = 0
+    reaction_times = []  # (name, ms)
 
-    #Mauler
-    offsetmauler = 0
-    xhit_mauler = False
-    imauler = 0
-    xmauler_done = False
-    imauler2 = 2
+    pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN, EVT_SPAWN])
+    hm_put_buttons(["RESET","+","SCORE BOARD","<","Enter",">","BACK","-","BLIND SHOT"])
+    schedule_next_spawn()
 
-    #Cow
-    offsetCow = 0
-    xhit_Cow = False
-    iCow = 0
-    iCow2 = 2
-    xCow_done = False
+    running = True
+    while running:
+        now = pygame.time.get_ticks()
 
-    #EarthElement
-    offsetEarthElement = 0
-    xhit_EarthElement = False
-    iEarthElement = 0
-    iEarthElement2 = 2
-    xEarthElement_done = False
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT:
+                running = False
+            elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+                running = False
 
-    #SwampCreature
-    offsetSwampCreature = 0
-    xhit_SwampCreature = False
-    iSwampCreature = 0
-    iSwampCreature2 = 2
-    xSwampCreature_done = False
+            elif ev.type == EVT_SPAWN and remaining:
+                idx = remaining.pop()
+                current_enemy = idx
+                current_mask  = enemy_masks[idx]
+                pos_i = pos_pool.pop() if pos_pool else random.randrange(len(POSITIONS))
+                current_pos = POSITIONS[pos_i]
+                spawn_ticks = now
+                waiting_for_click = True
+                hm_rgb((140, 0, 140))  # bereit
 
-    #Bullrog
-    offsetBullrog = 0
-    xhit_Bullrog = False
-    iBullrog = 0
-    iBullrog2 = 2
-    xBullrog_done = False
-
-    #Mercenary
-    offsetMercenary = 0
-    xhit_Mercenary = False
-    iMercenary = 0
-    iMercenary2 = 2
-    xMercenary_done = False
-
-    #Icemonster
-    offsetIcemonster = 0
-    xhit_Icemonster = False
-    iIcemonster = 0
-    iIcemonster2 = 2
-    xIcemonster_done = False
-
-
-    class Player:
-        def __init__(self, name, score, timescore):
-            self.name = name
-            self.score = score
-            self.timescore = timescore
-
-    def zeichnen():
-        global imauler,xmauler_done,imauler2
-        global iCow, xCow_done, iCow2, xhit_Cow
-        global iSwampCreature, xSwampCreature_done, iSwampCreature2, xhit_SwampCreature
-        global iEarthElement, xEarthElement_done, iEarthElement2, xhit_EarthElement
-        global iBullrog, xBullrog_done, iBullrog2,xhit_Bullrog
-        global iMercenary, xMercenary_done, iMercenary2, xhit_Mercenary
-        global iIcemonster, xIcemonster_done, iIcemonster2, xhit_Icemonster
-        global iTime,iFPS,xGameOver,iActiveEnemy,xStartCounter,iCountTmp,iCountNext,iTimerNext,xNewTarget
-        global xyPosi,iActivePosi,xyPosi1,xyPosi2,xyPosi3,xyPosi4,xyPosi5,xyPosi6,xyPosi7
-        global iCountScoreTimer,xCountScoreTimer,iTimeRnd,iScoreCalculated,txtScore_y,get_yposi,iScoreVisible,txt_ScoreShot
-
-        #Active Position
-        if iActivePosi == 1:
-            xyPosi = xyPosi1
-        if iActivePosi == 2:
-            xyPosi = xyPosi2
-        if iActivePosi == 3:
-            xyPosi = xyPosi3
-        if iActivePosi == 4:
-            xyPosi = xyPosi4
-        if iActivePosi == 5:
-            xyPosi = xyPosi5
-        if iActivePosi == 6:
-            xyPosi = xyPosi6
-        if iActivePosi == 7:
-            xyPosi = xyPosi7
-
-        ##### Background #######
-        screen.blit(pic_background, (0, 0))
-        if not xGameOver:
-            # CountDown
-            if xStartCounter:
-                iFPS += 1
-                if iFPS >= 30:
-                    iTime -= 1
-                    iFPS = 0
-
-            #txt_CountDown = GAME_FONT.render(str(iTime), True, (255, 255, 255))
-            #screen.blit(txt_CountDown, (80, 60))
-
-            if iActiveEnemy == 1:
-                #Cow
-                if not xhit_Cow:
-                    screen.blit(pic_Cow[0], xyPosi)
+            elif ev.type == pygame.MOUSEBUTTONDOWN and waiting_for_click and current_enemy is not None:
+                mx, my = ev.pos
+                last_cross_pos = (mx - cross.get_width()//2, my - cross.get_height()//2)
+                cross_show_until = now + 120
+                off = (last_cross_pos[0] - current_pos[0], last_cross_pos[1] - current_pos[1])
+                if current_mask.overlap(cross_mask, off):
+                    rt = now - spawn_ticks
+                    reaction_times.append((ENEMIES[current_enemy][0], rt))
+                    waiting_for_click = False
+                    hm_rgb((0, 255, 0))
+                    # Death-Animation für diesen Gegner
+                    play_death(screen, clock, bg, overlay, current_enemy, current_pos,
+                               enemy_surfs, death_cache)
+                    current_enemy = None; current_pos = None; current_mask = None
+                    schedule_next_spawn()
                 else:
-                    screen.blit(pic_Cow[18], xyPosi)
-                    if not xCow_done:
-                        screen.blit(pic_Cow[iCow], xyPosi)
-                        iCow2 += 1
-                        if iCow2 > ipicture_speed:
-                            iCow2 = 0
-                            iCow += 1
-                            if iCow > 18:
-                                xCow_done = True
-                    else:
-                        screen.blit(pic_Cow[18], xyPosi)
-                if xhit_Cow:
-                    if get_yposi:
-                        get_yposi = False
-                        txtScore_y = xyPosi[1]
-                    iScoreVisible += 1
-                    if iScoreVisible < 40:
-                        screen.blit(txt_ScoreShot, (xyPosi[0] + 40, txtScore_y))
-                        txtScore_y = txtScore_y - 3
-                    iCountTmp += 1
-                    if iCountTmp >= 3:
-                        iCountNext += 1
-                        iCountTmp = 0
-                    if iCountNext >= iTimeRnd:
-                        xNewTarget = True
-                        iCountNext = 0
+                    hm_rgb((255, 0, 0))
 
-            if iActiveEnemy == 2:
-                #Mauler
-                if not xhit_mauler:
-                    screen.blit(pic_Mauler, xyPosi)
+        # Hardware-Shooter (optional)
+        if waiting_for_click and current_enemy is not None and hm_hit_detected():
+            pos = hm_get_pos()
+            if pos:
+                mx, my = pos
+                last_cross_pos = (mx - cross.get_width()//2, my - cross.get_height()//2)
+                cross_show_until = now + 120
+                off = (last_cross_pos[0] - current_pos[0], last_cross_pos[1] - current_pos[1])
+                if current_mask.overlap(cross_mask, off):
+                    rt = now - spawn_ticks
+                    reaction_times.append((ENEMIES[current_enemy][0], rt))
+                    waiting_for_click = False
+                    hm_rgb((0, 255, 0))
+                    play_death(screen, clock, bg, overlay, current_enemy, current_pos,
+                               enemy_surfs, death_cache)
+                    current_enemy = None; current_pos = None; current_mask = None
+                    schedule_next_spawn()
                 else:
-                    if not xmauler_done:
-                        screen.blit(pic_Mauler_death[imauler], xyPosi)
-                        imauler2 += 1
-                        if imauler2 > ipicture_speed:
-                            imauler2 = 0
-                            imauler += 1
-                            if imauler > 12:
-                                xmauler_done = True
-                    else:
-                        screen.blit(pic_Mauler_death[12], xyPosi)
-                if xhit_mauler:
-                    if get_yposi:
-                        get_yposi = False
-                        txtScore_y = xyPosi[1]
-                    iScoreVisible += 1
-                    if iScoreVisible < 40:
-                        screen.blit(txt_ScoreShot, (xyPosi[0] + 40, txtScore_y))
-                        txtScore_y = txtScore_y - 3
-                    iCountTmp += 1
-                    if iCountTmp >= 3:
-                        iCountNext += 1
-                        iCountTmp = 0
-                    if iCountNext >= iTimeRnd:
-                        xNewTarget = True
-                        iCountNext = 0
+                    hm_rgb((255, 0, 0))
 
-            #EarthElement
-            if iActiveEnemy == 3:
-                if not xhit_EarthElement:
-                    screen.blit(pic_EarthElement, xyPosi)
-                else:
-                    if not xEarthElement_done:
-                        screen.blit(pic_EarthElement_death[iEarthElement], xyPosi)
-                        iEarthElement2 += 1
-                        if iEarthElement2 > ipicture_speed:
-                            iEarthElement2 = 0
-                            iEarthElement += 1
-                            if iEarthElement > 10:
-                                xEarthElement_done = True
-                    else:
-                        screen.blit(pic_EarthElement_death[10], xyPosi)
-                if xhit_EarthElement:
-                    if get_yposi:
-                        get_yposi = False
-                        txtScore_y = xyPosi[1]
-                    iScoreVisible += 1
-                    if iScoreVisible < 40:
-                        screen.blit(txt_ScoreShot, (xyPosi[0] + 40, txtScore_y))
-                        txtScore_y = txtScore_y - 3
-                    iCountTmp += 1
-                    if iCountTmp >= 3:
-                        iCountNext += 1
-                        iCountTmp = 0
-                    if iCountNext >= iTimeRnd:
-                        xNewTarget = True
-                        iCountNext = 0
+        # Zeichnen
+        screen.blit(bg, (0,0))
+        if current_enemy is not None and current_pos is not None:
+            screen.blit(enemy_surfs[current_enemy], current_pos)
+        screen.blit(overlay, (0,0))
+        if last_cross_pos and now < cross_show_until:
+            screen.blit(cross, last_cross_pos)
 
-            #SwampCreature
-            if iActiveEnemy == 4:
-                if not xhit_SwampCreature:
-                    screen.blit(pic_SwampCreature, xyPosi)
-                else:
-                    if not xSwampCreature_done:
-                        screen.blit(pic_SwampCreature_death[iSwampCreature], xyPosi)
-                        iSwampCreature2 += 1
-                        if iSwampCreature2 > ipicture_speed:
-                            iSwampCreature2 = 0
-                            iSwampCreature += 1
-                            if iSwampCreature > 12:
-                                xSwampCreature_done = True
-                    else:
-                        screen.blit(pic_SwampCreature_death[12], xyPosi)
-                if xhit_SwampCreature:
-                    if get_yposi:
-                        get_yposi = False
-                        txtScore_y = xyPosi[1]
-                    iScoreVisible += 1
-                    if iScoreVisible < 40:
-                        screen.blit(txt_ScoreShot, (xyPosi[0] + 40, txtScore_y))
-                        txtScore_y = txtScore_y - 3
-                    iCountTmp += 1
-                    if iCountTmp >= 3:
-                        iCountNext += 1
-                        iCountTmp = 0
-                    if iCountNext >= iTimeRnd:
-                        xNewTarget = True
-                        iCountNext = 0
-
-            #Bullrog
-            if iActiveEnemy == 5:
-                if not xhit_Bullrog:
-                    screen.blit(pic_Bullrog, xyPosi)
-                else:
-                    if not xBullrog_done:
-                        screen.blit(pic_Bullrog_death[iBullrog], xyPosi)
-                        iBullrog2 += 1
-                        if iBullrog2 > ipicture_speed:
-                            iBullrog2 = 0
-                            iBullrog += 1
-                            if iBullrog > 19:
-                                xBullrog_done = True
-                    else:
-                        screen.blit(pic_Bullrog_death[19], xyPosi)
-                if xhit_Bullrog:
-                    if get_yposi:
-                        get_yposi = False
-                        txtScore_y = xyPosi[1]
-                    iScoreVisible += 1
-                    if iScoreVisible < 40:
-                        screen.blit(txt_ScoreShot, (xyPosi[0] + 40, txtScore_y))
-                        txtScore_y = txtScore_y - 3
-                    iCountTmp += 1
-                    if iCountTmp >= 3:
-                        iCountNext += 1
-                        iCountTmp = 0
-                    if iCountNext >= iTimeRnd:
-                        xNewTarget = True
-                        iCountNext = 0
-
-            #Mercenary
-            if iActiveEnemy == 6:
-                if not xhit_Mercenary:
-                    screen.blit(pic_Mercenary, xyPosi)
-                else:
-                    if not xMercenary_done:
-                        screen.blit(pic_Mercenary_death[iMercenary], xyPosi)
-                        iMercenary2 += 1
-                        if iMercenary2 > ipicture_speed:
-                            iMercenary2 = 0
-                            iMercenary += 1
-                            if iMercenary > 10:
-                                xMercenary_done = True
-                    else:
-                        screen.blit(pic_Mercenary_death[10], xyPosi)
-                if xhit_Mercenary:
-                    if get_yposi:
-                        get_yposi = False
-                        txtScore_y = xyPosi[1]
-                    iScoreVisible += 1
-                    if iScoreVisible < 40:
-                        screen.blit(txt_ScoreShot, (xyPosi[0] + 40, txtScore_y))
-                        txtScore_y = txtScore_y - 3
-                    iCountTmp += 1
-                    if iCountTmp >= 3:
-                        iCountNext += 1
-                        iCountTmp = 0
-                    if iCountNext >= iTimeRnd:
-                        xNewTarget = True
-                        iCountNext = 0
-
-            #Icemonster
-            if iActiveEnemy == 7:
-                if not xhit_Icemonster:
-                    screen.blit(pic_Icemonster, xyPosi)
-                else:
-                    if not xIcemonster_done:
-                        screen.blit(pic_Icemonster_death[iIcemonster], xyPosi)
-                        iIcemonster2 += 1
-                        if iIcemonster2 > ipicture_speed:
-                            iIcemonster2 = 0
-                            iIcemonster += 1
-                            if iIcemonster > 16:
-                                xIcemonster_done = True
-                    else:
-                        screen.blit(pic_Icemonster_death[16], xyPosi)
-                if xhit_Icemonster:
-                    if get_yposi:
-                        get_yposi = False
-                        txtScore_y = xyPosi[1]
-                    iScoreVisible += 1
-                    if iScoreVisible < 40:
-                        screen.blit(txt_ScoreShot, (xyPosi[0] + 40, txtScore_y))
-                        txtScore_y = txtScore_y - 3
-                    iCountTmp += 1
-                    if iCountTmp >= 3:
-                        iCountNext += 1
-                        iCountTmp = 0
-                    if iCountNext >= iTimeRnd:
-                        xNewTarget = True
-                        iCountNext = 0
-
-            screen.blit(pic_Overlay1, (0, 0))
-
-        else:#GameOver
-            screen.fill(BLACK)
-            iScoreCalculated = iCountScoreTimer / 30
-            iScoreCalculated = int(1 / iScoreCalculated * 10000)
-            txt_Score = GAME_FONT.render("Score: " + str(iScoreCalculated), True, (255, 255, 255))
-            screen.blit(txt_Score, (500, 250))
-
+        # HUD
+        font = pygame.font.SysFont("Arial", 18)
+        screen.blit(font.render(f"Verbleibend: {len(remaining)}   Gemessen: {len(reaction_times)}",
+                                True, (255,255,255)), (10,10))
 
         pygame.display.flip()
+        clock.tick(FPS_LIMIT)
 
+        if not remaining and not waiting_for_click and current_enemy is None:
+            running = False
 
-    def Evaluation():
-        global xHit,xhit_mauler,xhit_Cow,xhit_EarthElement,xhit_SwampCreature,xhit_Bullrog,xhit_Mercenary,xhit_Icemonster
-        global mausx,mausy,PlayerScore,get_yposi,iScoreVisible,xColourCont,iActiveEnemy,xyPosi
-        global iCountScoreTimer,xCountScoreTimer,xtmpHit,iTimeScore,xInit
+    # Ergebnis
+    total_ms = sum(t for _, t in reaction_times) if reaction_times else 0
+    screen.fill((0,0,0))
+    fontH = pygame.font.SysFont("Arial", 28, bold=True)
+    font  = pygame.font.SysFont("Arial", 24)
+    y = 60
+    screen.blit(fontH.render("Ergebnis", True, (255,255,255)), (50,20))
+    for name, t in reaction_times:
+        screen.blit(font.render(f"{name}: {t/1000:.3f} s", True, (200,200,200)), (50,y))
+        y += 32
+    screen.blit(font.render("-"*30, True, (120,120,120)), (50,y)); y += 32
+    screen.blit(font.render(f"Gesamtzeit (Score): {total_ms/1000:.3f} s", True, (255,255,0)), (50,y))
+    pygame.display.flip()
 
-        MaskDiabolo = pygame.mask.from_surface(Diabolo)
-        if iActiveEnemy == 1:
-            offsetCow = ((mausx - (xyPosi[0] + offsetDiabolo)), int(mausy - (xyPosi[1] + offsetDiabolo)))
-            if mask_Cow.overlap(MaskDiabolo, offsetCow):
-                PlayerScore += 10
-                xhit_Cow = True
-                xHit = True
+    # warten bis Taste
+    wait = True
+    while wait:
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT: wait = False
+            elif ev.type == pygame.KEYDOWN or ev.type == pygame.MOUSEBUTTONDOWN: wait = False
+        clock.tick(30)
 
-        if iActiveEnemy == 2:
-            offsetmauler = ((mausx - (xyPosi[0] + offsetDiabolo)), int(mausy - (xyPosi[1] + offsetDiabolo)))
-            if mask_mauler.overlap(MaskDiabolo, offsetmauler):
-                PlayerScore += 10
-                xhit_mauler = True
-                xHit = True
+# ---- Death-Animation -----------------------------------------------------------
+def play_death(screen, clock, bg, overlay, enemy_idx, pos, enemy_surfs, death_cache):
+    """Spielt die Death-Animation des getroffenen Gegners ab (lazy-loaded, 12fps)."""
+    name, folder, _ = ENEMIES[enemy_idx]
 
-        if iActiveEnemy == 3:
-            offsetEarthElement = ((mausx - (xyPosi[0] + offsetDiabolo)), int(mausy - (xyPosi[1] + offsetDiabolo)))
-            if mask_EarthElement.overlap(MaskDiabolo, offsetEarthElement):
-                PlayerScore += 10
-                xhit_EarthElement = True
-                xHit = True
-
-        if iActiveEnemy == 4:
-            offsetSwampCreature = ((mausx - (xyPosi[0] + offsetDiabolo)), int(mausy - (xyPosi[1] + offsetDiabolo)))
-            if mask_SwampCreature.overlap(MaskDiabolo, offsetSwampCreature):
-                PlayerScore += 10
-                xhit_SwampCreature = True
-                xHit = True
-
-        if iActiveEnemy == 5:
-            offsetBullrog = ((mausx - (xyPosi[0] + offsetDiabolo)), int(mausy - (xyPosi[1] + offsetDiabolo)))
-            if mask_Bullrog.overlap(MaskDiabolo, offsetBullrog):
-                PlayerScore += 10
-                xhit_Bullrog = True
-                xHit = True
-
-        if iActiveEnemy == 6:
-            offsetMercenary = ((mausx - (xyPosi[0] + offsetDiabolo)), int(mausy - (xyPosi[1] + offsetDiabolo)))
-            if mask_Mercenary.overlap(MaskDiabolo, offsetMercenary):
-                PlayerScore += 10
-                xhit_Mercenary = True
-                xHit = True
-
-        if iActiveEnemy == 7:
-            offsetIcemonster = ((mausx - (xyPosi[0] + offsetDiabolo)), int(mausy - (xyPosi[1] + offsetDiabolo)))
-            if mask_Icemonster.overlap(MaskDiabolo, offsetIcemonster):
-                PlayerScore += 10
-                xhit_Icemonster = True
-                xHit = True
-
-        if xHit:
-            xInit = False
-            iTimeScore = iTimeScore + iCountScoreTimer
-            print(iTimeScore)
-            xtmpHit = False
-            xColourCont = True
-            hmsysteme.put_rgbcolor((0, 255, 0))
-            get_yposi = True
-            iScoreVisible = 0
+    # Frames laden & cachen (nur beim ersten Treffer dieses Gegners)
+    if enemy_idx not in death_cache:
+        paths = list_death_frames(folder)
+        if paths:
+            death_cache[enemy_idx] = [load_image(p) for p in paths]
         else:
-            xColourCont = True
-            hmsysteme.put_rgbcolor((255, 0, 0))
+            death_cache[enemy_idx] = []  # kein Death-Ordner vorhanden
 
-    def reset_parameter():
-        global Diabolo_Rect,mausx,mausy
-        global xhit_mauler,xhit_Cow,xhit_EarthElement,xhit_SwampCreature,xhit_Bullrog,xhit_Mercenary,xhit_Icemonster
-        Diabolo_Rect = [-20, -20]
-        mausx = 0
-        mausy = 0
+    frames = death_cache[enemy_idx]
+    if not frames:
+        # Kein Death-Ordner -> kurzer Fallback (z. B. kurzes „Wackeln“)
+        t_end = pygame.time.get_ticks() + DEATH_FALLBACK
+        base = enemy_surfs[enemy_idx]
+        up   = 2
+        while pygame.time.get_ticks() < t_end:
+            for ev in pygame.event.get():
+                if ev.type == pygame.QUIT: return
+                if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE: return
+            screen.blit(bg,(0,0)); screen.blit(base,(pos[0], pos[1]-up)); screen.blit(overlay,(0,0))
+            pygame.display.flip()
+            clock.tick(60)
+            up = -up
+        return
 
+    frame_time = int(1000 / DEATH_FPS)
+    for surf in frames:
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT: return
+            if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE: return
+        screen.blit(bg, (0,0))
+        screen.blit(surf, pos)
+        screen.blit(overlay, (0,0))
+        pygame.display.flip()
+        pygame.time.delay(frame_time)
 
-    ###########define masks############
-    mask_mauler = pygame.mask.from_surface(pic_Mauler)
-    mask_Cow = pygame.mask.from_surface(pic_Cow[0])
-    mask_EarthElement = pygame.mask.from_surface(pic_EarthElement)
-    mask_SwampCreature = pygame.mask.from_surface(pic_SwampCreature)
-    mask_Bullrog = pygame.mask.from_surface(pic_Bullrog)
-    mask_Mercenary = pygame.mask.from_surface(pic_Mercenary)
-    mask_Icemonster = pygame.mask.from_surface(pic_Icemonster)
-    # Start Game
-    while hmsysteme.game_isactive():
-
-        # The Game
-        if xInitGame:
-            timeInitPopup = random.choice(InitTimeRndPopUp)
-            xInitGame = False
-            xNewTarget = True
-        if iInitTimePopup < timeInitPopup:
-            iInitTimePopup += 1
-        else:
-            if xHit:
-                xStartCounter = True
-                xHit = False
-
-            for event in pygame.event.get():
-                # Beenden bei [ESC] oder [X]
-                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-                    pygame.display.quit()
-                    pygame.quit()
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    hit_for_screenshot = True
-                    print(hit_for_screenshot)
-                    mausx = event.pos[0]  # pos = pygame.mouse.get_pos() MAUSPOSITION ingame
-                    mausy = event.pos[1]
-                    print("X:", mausx, "Y:", mausy)
-                    Diabolo_Rect = pygame.Rect(mausx - 9, mausy - 9, 18, 18)
-                    screen.blit(Diabolo, Diabolo_Rect)
-
-                    # Screenshot
-                    if hit_for_screenshot:
-                        screen.blit(Diabolo, Diabolo_Rect)
-                        pygame.display.flip()
-                        hmsysteme.take_screenshot(screen)
-                        hit_for_screenshot = False
-
-                    #Calculate Shot
-                    Evaluation()
-
-            if hmsysteme.hit_detected():
-                hit_for_screenshot = True
-                pos = hmsysteme.get_pos()
-                mausx = pos[0]
-                mausy = pos[1]
-                Diabolo_Rect = pygame.Rect(mausx - 9, mausy - 9, 18, 18)
-                screen.blit(Diabolo, Diabolo_Rect)
-                # Calculate Shot
-                Evaluation()
-
-            # Screenshot
-            if hit_for_screenshot:
-                screen.blit(Diabolo, Diabolo_Rect)
-                pygame.display.flip()
-                hmsysteme.take_screenshot(screen)
-                hit_for_screenshot = False
-
-            if xNewTarget:
-                hmsysteme.put_rgbcolor((140, 0, 140))
-                xColourCont = True
-                iTimeRnd = random.choice(timeRndPopUp)
-                iActiveEnemy = random.choice(listEnemy)
-                iActivePosi = random.choice(listPosition)
-                if len(listEnemy) > 1:
-                    listEnemy.remove(iActiveEnemy)
-                if len(listPosition) > 1:
-                    listPosition.remove(iActivePosi)
-                else:
-                    xGameOver = True
-                xNewTarget = False
-                if not xInit:
-                    xtmpHit = True
-
-
-            if xtmpHit and not xGameOver:
-                print("hochzaehlen")
-                iCountScoreTimer += 1
-
-            if xColourCont:
-                iColourCount += 1
-                if iColourCount == 30:
-                    hmsysteme.put_rgbcolor((0, 0, 0))
-                    xColourCont = False
-                    iColourCount = 0
-        #Zeichnen
-        zeichnen()
-        clock.tick(framerate)
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-
-
