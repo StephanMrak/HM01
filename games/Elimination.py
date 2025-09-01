@@ -1,539 +1,444 @@
+# Elimination_optimized.py — 1366x768 • HM+Maus • KO-Turnier
+# Update: kräftige Explosion (Splitter + Funken + Flash + Shockwave + Screen-Shake), kein Rauch
+import os, random, math, pygame
 
-def main():
-    global mausx,mausy,hit_for_screenshot,offsetDiabolo
-    global jackfruit_hit,stinkfrucht_hit,ananas_hit,sauersack_hit,kiwi_hit,birne_hit,banane_hit,apfel_hit,orange_hit,himbeere_hit,kirsche_hit,brombeere_hit,erdbeere_hit
-    global jackfruit_done,stinkfrucht_done,ananas_done,sauersack_done,kiwi_done,birne_done,banane_done,apfel_done,orange_done,himbeere_done,kirsche_done,brombeere_done,erdbeere_done
-    global yJackFruit,ystinkfrucht,yananas,ysauersack,ykiwi,ybirne,ybanane,yapfel,yorange,yhimbeere,ykirsche,ybrombeere,yerdbeere
-    global xResetFruits,iTmpCount,xHitColour,iActivePlayer,tmpListActivePlayer,ListActivePlayer,xInitGame,xFinalshootout,iTmpList,xWin,iColourCount,xCoulourStart
-
-    import pygame
-    import time
+# -------- optionale hmsysteme-Wrapper --------
+try:
     import hmsysteme
-    import os
-    import platform
-    import random
-    import pygame.freetype
-    hmsysteme.put_button_names(["x", "x", "x", "x", "x", "x", "x", "x", "x"])
-    print(platform.uname())
-    pygame.init()
+    HAS_HM = True
+except Exception:
+    HAS_HM = False
 
-    #size = [1366, 768]
-    size = hmsysteme.get_size()
+def hm_names():
+    if HAS_HM and hasattr(hmsysteme, "get_playernames"):
+        try: return hmsysteme.get_playernames()
+        except Exception: pass
+    return []
 
-    #Get Playernames
-    names = hmsysteme.get_playernames()
-    if not names:
-        #names = ["Player 1", "Player 2", "Player 3", "Player 4"]
-        names = ["Stephan", "Marion", "Florian", "Peter Mafai"]
+def hm_game_active():
+    if HAS_HM and hasattr(hmsysteme, "game_isactive"):
+        try: return hmsysteme.game_isactive()
+        except Exception: pass
+    return True
 
-    path = os.path.realpath(__file__)
-    #    path = path.replace('Prestige\Prestige.py', '')
-    if 'Linux' in platform.uname():
-        path = path.replace('Elimination.py', '')
-    else:
-        path = path.replace('Elimination.py', '')
+def hm_hit_detected():
+    return HAS_HM and hasattr(hmsysteme, "hit_detected") and hmsysteme.hit_detected()
 
-    #screen = pygame.display.set_mode(size)
-    screen=pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+def hm_get_pos():
+    if HAS_HM and hasattr(hmsysteme, "get_pos"):
+        try: return hmsysteme.get_pos()
+        except Exception: return None
+    return None
 
-    clock = pygame.time.Clock()
-    pygame.display.set_caption("Elimination")
+def hm_screenshot(screen):
+    if HAS_HM and hasattr(hmsysteme, "take_screenshot"):
+        try: hmsysteme.take_screenshot(screen)
+        except Exception: pass
 
-    #Pics
-    Diabolo = pygame.image.load(os.path.join(path,"pics/Schuss.png"))
-    Tree = pygame.image.load(os.path.join(path,"pics/Elimination/Baum.png"))
-    JackFruit_origin = pygame.image.load(os.path.join(path,"pics/Elimination/Groß/Jackfruitx.png"))
-    Sauersack_origin = pygame.image.load(os.path.join(path,"pics/Elimination/Groß/Sauersackx.png"))
-    Stinkfrucht_origin = pygame.image.load(os.path.join(path, "pics/Elimination/Groß/Stinkfruchtx.png"))
-    Ananas_origin = pygame.image.load(os.path.join(path, "pics/Elimination/Groß/Ananas.png"))
-    Banane_origin = pygame.image.load(os.path.join(path,"pics/Elimination/Mittel/Bananen.png"))
-    Apfel_origin = pygame.image.load(os.path.join(path, "pics/Elimination/Mittel/Apfel.png"))
-    Birne_origin = pygame.image.load(os.path.join(path, "pics/Elimination/Mittel/Birne.png"))
-    Kiwi_origin = pygame.image.load(os.path.join(path, "pics/Elimination/Mittel/Kiwi.png"))
-    Himbeere_origin = pygame.image.load(os.path.join(path, "pics/Elimination/Klein/Himbeere.png"))
-    Kirsche_origin = pygame.image.load(os.path.join(path, "pics/Elimination/Klein/Kirsche.png"))
-    Orange_origin = pygame.image.load(os.path.join(path, "pics/Elimination/Mittel/Orange.png"))
-    Brombeere_origin = pygame.image.load(os.path.join(path, "pics/Elimination/Klein/Brombeere.png"))
-    Erdbeere_origin = pygame.image.load(os.path.join(path, "pics/Elimination/Klein/Erdbeere.png"))
-    JackFruit = pygame.transform.scale(JackFruit_origin, (110,159))
-    Sauersack = pygame.transform.scale(Sauersack_origin, (110, 177))
-    Stinkfrucht = pygame.transform.scale(Stinkfrucht_origin, (110, 167))
-    Bananen = pygame.transform.scale(Banane_origin, (110, 99))
-    Apfel = pygame.transform.scale(Apfel_origin, (70, 87))
-    Birne = pygame.transform.scale(Birne_origin, (70, 86))
-    Himbeere = pygame.transform.scale(Himbeere_origin, (40, 50))
-    Kirsche = pygame.transform.scale(Kirsche_origin, (50, 51))
-    Kiwi = pygame.transform.scale(Kiwi_origin, (80, 73))
-    Ananas = pygame.transform.scale(Ananas_origin, (110, 192))
-    Orange = pygame.transform.scale(Orange_origin, (85, 73))
-    Brombeere = pygame.transform.scale(Brombeere_origin, (60, 77))
-    Erdbeere = pygame.transform.scale(Erdbeere_origin, (60, 87))
+def hm_buttons(labels):
+    if HAS_HM and hasattr(hmsysteme, "put_button_names"):
+        try: hmsysteme.put_button_names(labels)
+        except Exception: pass
 
-    ############Variablen###########
-    HIMMELBLAU = (120, 210, 255)
-    BLACK = (0,0,0)
-    framerate = 30
-    mausx = 0
-    mausy = 0
-    hit_for_screenshot = False
-    offsetDiabolo = 9
-    jackfruit_hit = False
-    jackfruit_done = False
-    stinkfrucht_hit = False
-    stinkfrucht_done = False
-    ananas_done = False
-    ananas_hit = False
-    sauersack_hit = False
-    sauersack_done = False
-    kiwi_hit = False
-    kiwi_done = False
-    birne_hit = False
-    birne_done = False
-    banane_hit = False
-    banane_done = False
-    apfel_hit = False
-    apfel_done = False
-    orange_hit = False
-    orange_done = False
-    himbeere_hit = False
-    himbeere_done = False
-    kirsche_hit = False
-    kirsche_done = False
-    brombeere_hit = False
-    brombeere_done = False
-    erdbeere_hit = False
-    erdbeere_done = False
-    yJackFruit = 410
-    ystinkfrucht = 470
-    yananas = 430
-    ysauersack = 410
-    ykiwi = 310
-    ybirne = 310
-    ybanane = 250
-    yapfel = 260
-    yorange = 310
-    yhimbeere = 150
-    ykirsche = 150
-    ybrombeere = 170
-    yerdbeere = 160
-    xResetFruits = False
-    iTmpCount = 0
-    Players = []
-    xHitColour = False
-    iActivePlayer = 0
-    tmpListActivePlayer = []
-    ListActivePlayer = []
-    xInitGame = True
-    xFinalshootout = False
-    iTmpList = 0
-    xWin = False
-    iColourCount = 0
-    xCoulourStart = False
+# -------- Konfiguration --------
+WIDTH, HEIGHT  = 1366, 768
+FPS_LIMIT      = 30
+CROSS_FLASH_MS = 120
 
-    #Fonts
-    GAME_FONT = pygame.font.SysFont("Times", 55)
-    WIN_FONT = pygame.font.SysFont("Times", 85)
-    class Player():
-        def __init__(self, name):
-            self.name = name
+# Explosion-Feintuning (mehr "Wumms")
+EXP_DURATION   = 0.9      # s gesamt
+GRAVITY        = 1300.0   # px/s^2
+MAX_SHARDS     = 32       # Splitter
+SPARK_COUNT    = 70       # Funken/Juice
+FLASH_MS       = 110      # kurzer Weißblitz
+SHAKE_MS       = 220      # Screen-Shake-Dauer
+SHAKE_AMPL     = 12       # max px
+SHOCK_MS       = 280      # Schockwelle
 
+RIGHT_INSET    = 90       # Spielernamen vom rechten Rand
 
+ASSET_ROOT = os.path.dirname(os.path.realpath(__file__))
 
-    def zeichnen():
-        global jackfruit_done,stinkfrucht_done,ananas_done,sauersack_done,kiwi_done,birne_done,banane_done,apfel_done,orange_done,himbeere_done,kirsche_done,brombeere_done,erdbeere_done
-        global yJackFruit,ystinkfrucht,yananas,ysauersack,ykiwi,ybirne,ybanane,yapfel,yorange,yhimbeere,ykirsche,ybrombeere,yerdbeere
-        global iActivePlayer,ListActivePlayer,xWin
+FRUITS_DEF = [
+    ("Jackfruit",   "pics/Elimination/Groß/Jackfruitx.png", (110,159), (350,410)),
+    ("Stinkfrucht", "pics/Elimination/Groß/Stinkfruchtx.png",(110,167), (550,470)),
+    ("Ananas",      "pics/Elimination/Groß/Ananas.png",     (110,192), (750,430)),
+    ("Sauersack",   "pics/Elimination/Groß/Sauersackx.png", (110,177), (950,410)),
+    ("Kiwi",        "pics/Elimination/Mittel/Kiwi.png",      (80, 73), (510,310)),
+    ("Birne",       "pics/Elimination/Mittel/Birne.png",     (70, 86), (660,310)),
+    ("Bananen",     "pics/Elimination/Mittel/Bananen.png",  (110, 99), (360,250)),
+    ("Apfel",       "pics/Elimination/Mittel/Apfel.png",     (70, 87), (940,260)),
+    ("Orange",      "pics/Elimination/Mittel/Orange.png",    (85, 73), (790,310)),
+    ("Himbeere",    "pics/Elimination/Klein/Himbeere.png",   (40, 50), (750,150)),
+    ("Kirsche",     "pics/Elimination/Klein/Kirsche.png",    (50, 51), (630,150)),
+    ("Brombeere",   "pics/Elimination/Klein/Brombeere.png",  (60, 77), (850,170)),
+    ("Erdbeere",    "pics/Elimination/Klein/Erdbeere.png",   (60, 87), (510,160)),
+]
 
-        if not xWin:
-            ##### Background #######
-            screen.fill(BLACK)
-            screen.blit(Tree,(0,0))
+# -------- Helpers --------
+def load_img(path, size=None):
+    surf = pygame.image.load(path).convert_alpha()
+    if size:
+        surf = pygame.transform.smoothscale(surf, size)
+    return surf
 
-            #Aktiver Spieler
-            txtActivePlayer = GAME_FONT.render(str(ListActivePlayer[iActivePlayer]), True, (255, 255, 255))
-            screen.blit(txtActivePlayer, (100, 100))
+def render_outlined(text, font, color, outline=(0,0,0), thick=1):
+    base = font.render(text, True, color)
+    outl = font.render(text, True, outline)
+    w, h = base.get_width()+2*thick, base.get_height()+2*thick
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    for dx in (-thick, 0, thick):
+        for dy in (-thick, 0, thick):
+            if dx == 0 and dy == 0: continue
+            surf.blit(outl, (dx+thick, dy+thick))
+    surf.blit(base, (thick, thick))
+    return surf
 
-            if not jackfruit_done:
-                if not jackfruit_hit:
-                    screen.blit(JackFruit, (350, 410))
-                else:
-                    screen.blit(JackFruit, (350, yJackFruit))
-                    yJackFruit += 8
-                    if yJackFruit > 800:
-                        jackfruit_done = True
+class Fruit:
+    __slots__ = ("name","surf","mask","x","y0","y","hit","done")
+    def __init__(self, name, surf, pos):
+        self.name = name
+        self.surf = surf
+        self.mask = pygame.mask.from_surface(surf)
+        self.x, self.y0 = pos
+        self.y = self.y0
+        self.hit = False
+        self.done = False
+    def reset(self):
+        self.y = self.y0; self.hit = False; self.done = False
+    def draw(self, screen, offset=(0,0)):
+        if not self.done:
+            screen.blit(self.surf, (self.x + offset[0], self.y + offset[1]))
 
-            if not stinkfrucht_done:
-                if not stinkfrucht_hit:
-                    screen.blit(Stinkfrucht, (550, 470))
-                else:
-                    screen.blit(Stinkfrucht, (550, ystinkfrucht))
-                    ystinkfrucht += 8
-                    if ystinkfrucht > 800:
-                        stinkfrucht_done = True
+# -------- Explosion --------
+class Shard:
+    __slots__ = ("surf","x","y","vx","vy","angle","omega","alpha")
+    def __init__(self, surf, x, y, vx, vy, angle, omega):
+        self.surf = surf
+        self.x, self.y = x, y
+        self.vx, self.vy = vx, vy
+        self.angle = angle
+        self.omega = omega
+        self.alpha = 255
 
-            if not ananas_done:
-                if not ananas_hit:
-                    screen.blit(Ananas, (750, 430))
-                else:
-                    screen.blit(Ananas, (750, yananas))
-                    yananas += 8
-                    if yananas > 800:
-                        ananas_done = True
-            if not sauersack_done:
-                if not sauersack_hit:
-                    screen.blit(Sauersack, (950, 410))
-                else:
-                    screen.blit(Sauersack, (950, ysauersack))
-                    ysauersack += 8
-                    if ysauersack > 800:
-                        sauersack_done = True
-            if not kiwi_done:
-                if not kiwi_hit:
-                    screen.blit(Kiwi, (510, 310))
-                else:
-                    screen.blit(Kiwi, (510, ykiwi))
-                    ykiwi += 8
-                    if ykiwi > 800:
-                        kiwi_done = True
-            if not birne_done:
-                if not birne_hit:
-                    screen.blit(Birne, (660, 310))
-                else:
-                    screen.blit(Birne, (660, ybirne))
-                    ybirne += 8
-                    if ybirne > 800:
-                        birne_done = True
-            if not banane_done:
-                if not banane_hit:
-                    screen.blit(Bananen, (360, 250))
-                else:
-                    screen.blit(Bananen, (360, ybanane))
-                    ybanane += 8
-                    if ybanane > 800:
-                        banane_done = True
-            if not apfel_done:
-                if not apfel_hit:
-                    screen.blit(Apfel, (940, 260))
-                else:
-                    screen.blit(Apfel, (940, yapfel))
-                    yapfel += 8
-                    if yapfel > 800:
-                        apfel_done = True
-            if not orange_done:
-                if not orange_hit:
-                    screen.blit(Orange, (790, 310))
-                else:
-                    screen.blit(Orange, (790, yorange))
-                    yorange += 8
-                    if yorange > 800:
-                        orange_done = True
-            if not himbeere_done:
-                if not himbeere_hit:
-                    screen.blit(Himbeere, (750, 150))
-                else:
-                    screen.blit(Himbeere, (750, yhimbeere))
-                    yhimbeere += 8
-                    if yhimbeere > 800:
-                        himbeere_done = True
-            if not kirsche_done:
-                if not kirsche_hit:
-                    screen.blit(Kirsche, (630, 150))
-                else:
-                    screen.blit(Kirsche, (630, ykirsche))
-                    ykirsche += 8
-                    if ykirsche > 800:
-                        kirsche_done = True
-            if not brombeere_done:
-                if not brombeere_hit:
-                    screen.blit(Brombeere, (850, 170))
-                else:
-                    screen.blit(Brombeere, (850, ybrombeere))
-                    ybrombeere += 8
-                    if ybrombeere > 800:
-                        brombeere_done = True
-            if not erdbeere_done:
-                if not erdbeere_hit:
-                    screen.blit(Erdbeere, (510, 160))
-                else:
-                    screen.blit(Erdbeere, (510, yerdbeere))
-                    yerdbeere += 8
-                    if yerdbeere > 800:
-                        erdbeere_done = True
+class Spark:
+    __slots__ = ("x","y","vx","vy","life","r","color")
+    def __init__(self, x,y,vx,vy,life,r,color):
+        self.x,self.y=x,y; self.vx,self.vy=vx,vy; self.life=life; self.r=r; self.color=color
+
+def make_explosion_from_fruit(fruit):
+    """Splitter+Funken aus Frucht: Center & Farbton ableiten."""
+    shards = []
+    fw, fh = fruit.surf.get_width(), fruit.surf.get_height()
+    cx, cy = fruit.x + fw/2, fruit.y + fh/2
+
+    # Kachelgröße dynamisch -> echte Fruchtstücke
+    tile = max(10, min(20, min(fw, fh)//6))
+    cols = max(1, fw // tile)
+    rows = max(1, fh // tile)
+    candidates = []
+    for cyi in range(rows):
+        for cxi in range(cols):
+            rx, ry = cxi*tile, cyi*tile
+            rect = pygame.Rect(rx, ry, tile, tile)
+            sub = fruit.surf.subsurface(rect)
+            br = sub.get_bounding_rect(min_alpha=10)
+            if br.width == 0 or br.height == 0:
+                continue
+            piece = sub.subsurface(br).copy()
+            px = fruit.x + rx + br.x
+            py = fruit.y + ry + br.y
+            candidates.append((piece, px, py))
+    random.shuffle(candidates)
+
+    for piece, px, py in candidates[:MAX_SHARDS]:
+        # radial nach außen, mit Extra-Punch
+        dx, dy = (px - cx), (py - cy)
+        base_ang = math.atan2(dy, dx)
+        ang  = base_ang + random.uniform(-0.4, 0.4)
+        spd  = random.uniform(420, 820)        # schneller
+        vx   = math.cos(ang)*spd
+        vy   = math.sin(ang)*spd - random.uniform(140, 260)
+        omega = random.uniform(-720, 720)      # schnelle Rotation
+        angle = random.uniform(0, 360)
+        shards.append(Shard(piece, px, py, vx, vy, angle, omega))
+
+    # Farbton grob aus zentralem Pixel → Funkenfarbe
+    c = fruit.surf.get_at((fw//2, fh//2))
+    base = (c.r, c.g, c.b)
+    sparks = []
+    for _ in range(SPARK_COUNT):
+        ang = random.uniform(0, 2*math.pi)
+        spd = random.uniform(500, 1000)
+        vx  = math.cos(ang)*spd
+        vy  = math.sin(ang)*spd - random.uniform(80, 180)
+        life = random.uniform(0.18, 0.42)
+        r = random.randint(2, 3)
+        jitter = lambda v: max(0,min(255,int(v + random.uniform(-30,30))))
+        col = (jitter(base[0]), jitter(base[1]), jitter(base[2]))
+        sparks.append(Spark(cx, cy, vx, vy, life, r, col))
+
+    return (cx, cy), base, shards, sparks
+
+def animate_explosion(screen, clock, draw_scene, fruit):
+    """Kurze, kräftige Explosion mit Screen-Shake, Flash und Schockwelle."""
+    (cx, cy), color, shards, sparks = make_explosion_from_fruit(fruit)
+    start = pygame.time.get_ticks()
+    last  = start
+    duration_ms = int(EXP_DURATION*1000)
+
+    # vorerzeugte Overlays
+    flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    shock_layer = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+
+    while True:
+        now = pygame.time.get_ticks()
+        dt = (now - last) / 1000.0
+        last = now
+
+        # ESC/QUIT zulassen
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT: return False
+            if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE: return False
+
+        t = now - start
+
+        # Physik
+        for s in shards:
+            s.vy += GRAVITY*dt
+            s.x += s.vx*dt
+            s.y += s.vy*dt
+            s.angle += s.omega*dt
+            s.alpha = max(0, s.alpha - int(255*dt/EXP_DURATION))
+
+        for sp in sparks[:]:
+            sp.life -= dt
+            sp.x += sp.vx*dt
+            sp.y += sp.vy*dt
+            sp.vx *= 0.985
+            sp.vy += GRAVITY*0.65*dt
+            if sp.life <= 0: sparks.remove(sp)
+
+        # Screen-Shake Offset (nur Szenerie, HUD bleibt stabil)
+        if t < SHAKE_MS:
+            amp = int(SHAKE_AMPL * (1.0 - t/ SHAKE_MS))
+            offset = (random.randint(-amp, amp), random.randint(-amp, amp))
         else:
-            screen.fill(BLACK)
-            txtWinner = WIN_FONT.render("Winner:", True, (255, 255, 255))
-            screen.blit(txtWinner, (540, 200))
-            txtActivePlayer = WIN_FONT.render(str(ListActivePlayer[iActivePlayer]), True, (255, 255, 255))
-            screen.blit(txtActivePlayer, (540, 300))
+            offset = (0,0)
+
+        # Grundszene
+        draw_scene(scene_offset=offset)
+
+        # Schockwelle (expandierender Ring, kurz)
+        if t < SHOCK_MS:
+            shock_layer.fill((0,0,0,0))
+            prog = t / SHOCK_MS
+            r = int(20 + prog*140)
+            a = max(0, int(180*(1.0-prog)))
+            col = (min(255, color[0]+40), min(255, color[1]+40), min(255, color[2]+40), a)
+            pygame.draw.circle(shock_layer, col, (int(cx+offset[0]), int(cy+offset[1])), r, 4)
+            screen.blit(shock_layer, (0,0))
+
+        # Splitter
+        for s in shards:
+            if s.alpha <= 0: continue
+            img = pygame.transform.rotozoom(s.surf, -s.angle, 1.0)
+            img.set_alpha(s.alpha)
+            screen.blit(img, (s.x + offset[0], s.y + offset[1]))
+
+        # Funken (Saftspritzer)
+        for sp in sparks:
+            if sp.life > 0:
+                pygame.draw.circle(screen, sp.color,
+                                   (int(sp.x + offset[0]), int(sp.y + offset[1])), sp.r)
+
+        # Flash (kurz Weißblende)
+        if t < FLASH_MS:
+            flash.fill((255,255,255, int(220*(1.0 - t/FLASH_MS))))
+            screen.blit(flash, (0,0))
 
         pygame.display.flip()
+        clock.tick(FPS_LIMIT)
 
+        if t > duration_ms:
+            break
 
-    def Evaluation():
-        global mausx,mausy,offsetDiabolo,xHitColour
-        global jackfruit_hit,stinkfrucht_hit,ananas_hit,sauersack_hit,kiwi_hit,birne_hit,banane_hit,apfel_hit,orange_hit,himbeere_hit,kirsche_hit,brombeere_hit,erdbeere_hit
-        global tmpListActivePlayer,iActivePlayer,xFinalshootout,iTmpList,xWin,xCoulourStart
+    fruit.done = True
+    return True
 
-        xHitColour = False
+# -------- Hauptprogramm --------
+def main():
+    pygame.init()
+    hm_buttons(["x"]*9)
 
-        offset_jackfruit = ((mausx - (350 + offsetDiabolo)), int(mausy - (410 + offsetDiabolo)))
-        if mask_jackfruit.overlap(mask_diabolo, offset_jackfruit):
-            jackfruit_hit = True
-            xHitColour = True
-        offset_stinkfrucht = ((mausx - (550 + offsetDiabolo)), int(mausy - (470 + offsetDiabolo)))
-        if mask_stinkfrucht.overlap(mask_diabolo, offset_stinkfrucht):
-            stinkfrucht_hit = True
-            xHitColour = True
-        offset_ananas = ((mausx - (750 + offsetDiabolo)), int(mausy - (430 + offsetDiabolo)))
-        if mask_ananas.overlap(mask_diabolo, offset_ananas):
-            ananas_hit = True
-            xHitColour = True
-        offset_sauersack = ((mausx - (950 + offsetDiabolo)), int(mausy - (410 + offsetDiabolo)))
-        if mask_sauersack.overlap(mask_diabolo, offset_sauersack):
-            sauersack_hit = True
-            xHitColour = True
-        offset_kiwi = ((mausx - (510 + offsetDiabolo)), int(mausy - (310 + offsetDiabolo)))
-        if mask_kiwi.overlap(mask_diabolo, offset_kiwi):
-            kiwi_hit = True
-            xHitColour = True
-        offset_birne = ((mausx - (660 + offsetDiabolo)), int(mausy - (310 + offsetDiabolo)))
-        if mask_birne.overlap(mask_diabolo, offset_birne):
-            birne_hit = True
-            xHitColour = True
-        offset_banane = ((mausx - (360 + offsetDiabolo)), int(mausy - (250 + offsetDiabolo)))
-        if mask_bananen.overlap(mask_diabolo, offset_banane):
-            banane_hit = True
-            xHitColour = True
-        offset_apfel = ((mausx - (940 + offsetDiabolo)), int(mausy - (260 + offsetDiabolo)))
-        if mask_apfel.overlap(mask_diabolo, offset_apfel):
-            apfel_hit = True
-            xHitColour = True
-        offset_orange = ((mausx - (790 + offsetDiabolo)), int(mausy - (310 + offsetDiabolo)))
-        if mask_orange.overlap(mask_diabolo, offset_orange):
-            orange_hit = True
-            xHitColour = True
-        offset_himbeere = ((mausx - (750 + offsetDiabolo)), int(mausy - (150 + offsetDiabolo)))
-        if mask_himbeere.overlap(mask_diabolo, offset_himbeere):
-            himbeere_hit = True
-            xHitColour = True
-        offset_kirsche = ((mausx - (630 + offsetDiabolo)), int(mausy - (150 + offsetDiabolo)))
-        if mask_kirsche.overlap(mask_diabolo, offset_kirsche):
-            kirsche_hit = True
-            xHitColour = True
-        offset_brombeere = ((mausx - (850 + offsetDiabolo)), int(mausy - (170 + offsetDiabolo)))
-        if mask_Brombeere.overlap(mask_diabolo, offset_brombeere):
-            brombeere_hit = True
-            xHitColour = True
-        offset_erdbeere = ((mausx - (510 + offsetDiabolo)), int(mausy - (160 + offsetDiabolo)))
-        if mask_erdbeere.overlap(mask_diabolo, offset_erdbeere):
-            erdbeere_hit = True
-            xHitColour = True
+    flags = pygame.FULLSCREEN | pygame.SCALED
+    try:
+        screen = pygame.display.set_mode((WIDTH, HEIGHT), flags, vsync=1)
+    except TypeError:
+        screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+    pygame.display.set_caption("Elimination — Fruits Knockout")
+    clock = pygame.time.Clock()
+    pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN])
 
-        if xHitColour:
-            xCoulourStart = True
-            hmsysteme.put_rgbcolor((0, 255, 0))
-            tmpListActivePlayer[iActivePlayer] = True
-            if iActivePlayer < len(ListActivePlayer):
-                iActivePlayer += 1
-            else:
-                iActivePlayer = 0
-        else:
-            xCoulourStart = True
-            hmsysteme.put_rgbcolor((255, 0, 0))
-            print("nicht getroffen:" + str(iActivePlayer))
-            tmpListActivePlayer[iActivePlayer] = False
-            if iActivePlayer < len(ListActivePlayer):
-                iActivePlayer += 1
-            else:
-                iActivePlayer = 0
+    # Hintergrund & Assets
+    bg = pygame.transform.smoothscale(load_img(os.path.join(ASSET_ROOT, "pics/Elimination/Baum.png")), (WIDTH, HEIGHT))
+    cross = load_img(os.path.join(ASSET_ROOT, "pics/Schuss.png"))
+    cross_mask = pygame.mask.from_surface(cross)
+    cross_pos, cross_until = None, 0
 
-        #next round
-        if iActivePlayer == len(ListActivePlayer):
-            print("last Player done")
-            for i in range(0, len(tmpListActivePlayer)):
-                if not tmpListActivePlayer[i]:
-                    if not xFinalshootout:
-                        print("löschen: " + str(i))
-                        del ListActivePlayer[i]
-                    else:
-                        if tmpListActivePlayer[0] and not tmpListActivePlayer[1]:
-                            del ListActivePlayer[1]
-                            print("delete [1]")
-                        if not tmpListActivePlayer[0] and tmpListActivePlayer[1]:
-                            del ListActivePlayer[0]
-                            print("delete[0]")
-            iActivePlayer = 0
-            #generate new tmpList
-            tmpListActivePlayer.clear()
-            for x in range(0, len(ListActivePlayer)):
-                tmpListActivePlayer.append(False)
-                print("neu generierte tmpListe: " + str(tmpListActivePlayer[x]))
+    fruits = [Fruit(name, load_img(os.path.join(ASSET_ROOT, rel), size), pos)
+              for name, rel, size, pos in FRUITS_DEF]
 
-        #final shooutout
-        if len(ListActivePlayer) == 2:
-            xFinalshootout = True
-            print("final shootout")
-        #winner
-        if len(ListActivePlayer) == 1:
-            xWin = True
-            print("Win")
+    def reset_all_fruits():
+        for f in fruits: f.reset()
+    def all_fruits_down():
+        return all(f.done for f in fruits)
 
-    def checkTargets():
-        global jackfruit_done,stinkfrucht_done,ananas_done,sauersack_done,kiwi_done,birne_done,banane_done,apfel_done,orange_done,himbeere_done,kirsche_done,brombeere_done,erdbeere_done
-        global jackfruit_hit,stinkfrucht_hit,ananas_hit,sauersack_hit,kiwi_hit,birne_hit,banane_hit,apfel_hit,orange_hit,himbeere_hit,kirsche_hit,brombeere_hit,erdbeere_hit
-        global yJackFruit, ystinkfrucht, yananas, ysauersack, ykiwi, ybirne, ybanane, yapfel, yorange, yhimbeere, ykirsche, ybrombeere, yerdbeere
-        global xResetFruits,iTmpCount
+    # Spieler / Turnier
+    original_players = hm_names() or ["flo", "kai", "alex", "stefan"]
+    start_idx = random.randrange(len(original_players))
+    active_players = original_players[start_idx:] + original_players[:start_idx]
+    eliminated_set = set()
+    current_player_idx = 0
+    round_hits = [None] * len(active_players)
 
-        if erdbeere_done:
-            if brombeere_done:
-                if kirsche_done:
-                    if himbeere_done:
-                        if orange_done:
-                            if apfel_done:
-                                if banane_done:
-                                    if birne_done:
-                                        if kiwi_done:
-                                            if sauersack_done:
-                                                if ananas_done:
-                                                    if stinkfrucht_done:
-                                                        if jackfruit_done:
-                                                            iTmpCount += 1
-                                                            if iTmpCount > 65:
-                                                                xResetFruits = True
-        if xResetFruits:
-            erdbeere_done = False
-            erdbeere_hit = False
-            brombeere_done = False
-            brombeere_hit = False
-            kirsche_done = False
-            kirsche_hit = False
-            himbeere_done = False
-            himbeere_hit = False
-            orange_done = False
-            orange_hit = False
-            apfel_done = False
-            apfel_hit = False
-            banane_done = False
-            banane_hit = False
-            birne_done = False
-            birne_hit = False
-            kiwi_done = False
-            kiwi_hit = False
-            sauersack_done = False
-            sauersack_hit = False
-            ananas_done = False
-            ananas_hit = False
-            stinkfrucht_done = False
-            stinkfrucht_hit = False
-            jackfruit_done = False
-            jackfruit_hit = False
-            yJackFruit = 410
-            ystinkfrucht = 470
-            yananas = 430
-            ysauersack = 410
-            ykiwi = 310
-            ybirne = 310
-            ybanane = 250
-            yapfel = 260
-            yorange = 310
-            yhimbeere = 150
-            ykirsche = 150
-            ybrombeere = 170
-            yerdbeere = 160
-            iTmpCount = 0
-            xResetFruits = False
+    # Fonts + Caches
+    font_hud   = pygame.font.Font(None, 64); font_hud.set_bold(True)
+    font_title = pygame.font.Font(None, 40); font_title.set_bold(True)
+    font_list  = pygame.font.Font(None, 34)
 
+    hud_cache = {}
+    def outlined_cache(names, color):
+        return {n: render_outlined(n, font_list, color) for n in names}
+    name_white = outlined_cache(original_players, (255,255,255))
+    name_yell  = outlined_cache(original_players, (255,240,0))
+    name_gray  = outlined_cache(original_players, (190,190,190))
+    title_surf = render_outlined("Spieler", font_title, (230,230,230))
 
-    def reset_parameter():
-        global Diabolo_Rect,mausx,mausy
-        Diabolo_Rect = [-20, -20]
-        mausx = 0
-        mausy = 0
+    def draw_scoreboard():
+        x_right = WIDTH - RIGHT_INSET
+        y = 16
+        r = title_surf.get_rect(topright=(x_right, y))
+        screen.blit(title_surf, r)
+        y = r.bottom + 8
+        current_name = active_players[current_player_idx] if active_players else ""
+        for name in original_players:
+            surf = name_yell[name] if (name == current_name and name not in eliminated_set) \
+                   else (name_gray[name] if name in eliminated_set else name_white[name])
+            rr = surf.get_rect(topright=(x_right, y))
+            screen.blit(surf, rr)
+            if name in eliminated_set:
+                pygame.draw.line(screen, (230,40,40), (rr.left-4, rr.centery), (rr.right, rr.centery), 3)
+            y = rr.bottom + 6
 
+    def draw_scene(extra_cross=True, scene_offset=(0,0)):
+        # Szene (Hintergrund + Früchte), optional mit Shake-Offset
+        screen.fill((0,0,0))
+        screen.blit(bg, scene_offset)
+        for f in fruits: f.draw(screen, offset=scene_offset)
+        if extra_cross and cross_pos and pygame.time.get_ticks() < cross_until:
+            screen.blit(cross, (cross_pos[0] + scene_offset[0], cross_pos[1] + scene_offset[1]))
+        # HUD stabil ohne Shake
+        label = f"Aktiver Spieler: {active_players[current_player_idx]}"
+        if label not in hud_cache:
+            hud_cache[label] = render_outlined(label, font_hud, (255,255,255))
+        screen.blit(hud_cache[label], (12, 10))
+        draw_scoreboard()
 
-    ###########define masks############
-    mask_jackfruit = pygame.mask.from_surface(JackFruit)
-    mask_stinkfrucht = pygame.mask.from_surface(Stinkfrucht)
-    mask_ananas = pygame.mask.from_surface(Ananas)
-    mask_sauersack = pygame.mask.from_surface(Sauersack)
-    mask_kiwi = pygame.mask.from_surface(Kiwi)
-    mask_birne = pygame.mask.from_surface(Birne)
-    mask_bananen = pygame.mask.from_surface(Bananen)
-    mask_apfel = pygame.mask.from_surface(Apfel)
-    mask_orange = pygame.mask.from_surface(Orange)
-    mask_himbeere = pygame.mask.from_surface(Himbeere)
-    mask_kirsche = pygame.mask.from_surface(Kirsche)
-    mask_Brombeere = pygame.mask.from_surface(Brombeere)
-    mask_erdbeere = pygame.mask.from_surface(Erdbeere)
-    mask_diabolo = pygame.mask.from_surface(Diabolo)
+    def draw_scene_and_flip():
+        draw_scene()
+        pygame.display.flip()
 
-    # Start Game
-    while hmsysteme.game_isactive():
+    def show_winner(name):
+        screen.fill((0,0,0))
+        win = render_outlined("Winner:", font_hud, (255,255,255))
+        who = render_outlined(name,        font_hud, (255,255,0))
+        screen.blit(win, (WIDTH//2 - win.get_width()//2, HEIGHT//2 - 120))
+        screen.blit(who, (WIDTH//2 - who.get_width()//2, HEIGHT//2 - 40))
+        pygame.display.flip()
+        wait = True
+        while wait:
+            for ev in pygame.event.get():
+                if ev.type == pygame.QUIT: wait = False
+                elif ev.type == pygame.KEYDOWN or ev.type == pygame.MOUSEBUTTONDOWN: wait = False
+            clock.tick(30)
 
-        if xInitGame:
-            # Create Playerclasses and tmpList
-            for i in range(0, len(names)):
-                Players.append(Player(names[i]))
-                tmpListActivePlayer.append(False)
-                ListActivePlayer.append(names[i])
-                print("tmpListe: " + str(tmpListActivePlayer[i]))
-                print("ActivePlayers: " + str(ListActivePlayer[i]))
-            xInitGame = False
+    def evaluate_shot(mx, my):
+        nonlocal cross_pos, cross_until
+        cross_pos = (mx - cross.get_width()//2, my - cross.get_height()//2)
+        cross_until = pygame.time.get_ticks() + CROSS_FLASH_MS
+        for f in fruits:
+            if f.done: continue
+            off = (cross_pos[0] - f.x, cross_pos[1] - f.y)
+            if f.mask.overlap(cross_mask, off):
+                f.hit = True
+                return True, f
+        return False, None
 
-        for event in pygame.event.get():
-            # Beenden bei [ESC] oder [X]
-            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-                pygame.display.quit()
-                pygame.quit()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                hit_for_screenshot = True
-                mausx = event.pos[0]  # pos = pygame.mouse.get_pos() MAUSPOSITION ingame
-                mausy = event.pos[1]
-                Diabolo_Rect = pygame.Rect(mausx - 9, mausy - 9, 18, 18)
-                screen.blit(Diabolo, Diabolo_Rect)
+    def reset_tree_if_needed():
+        if all_fruits_down():
+            for f in fruits: f.reset()
 
-                Evaluation()
+    def advance_turn(hit, fruit_hit):
+        nonlocal current_player_idx, active_players, round_hits, eliminated_set, hud_cache
+        hud_cache.clear()
+        if hit and fruit_hit:
+            if not animate_explosion(screen, clock, draw_scene, fruit_hit): return False
+            reset_tree_if_needed()
 
-                # Screenshot
-                if hit_for_screenshot:
-                    screen.blit(Diabolo, Diabolo_Rect)
-                    pygame.display.flip()
-                    hmsysteme.take_screenshot(screen)
-                    hit_for_screenshot = False
+        round_hits[current_player_idx] = bool(hit)
+        current_player_idx += 1
+        if current_player_idx < len(active_players):
+            return True
 
+        # Rundenende
+        if len(active_players) > 2:
+            if any(round_hits):
+                new_active = [p for p, h in zip(active_players, round_hits) if h]
+                eliminated_set.update(set(active_players) - set(new_active))
+                active_players[:] = new_active
+            round_hits[:] = [None] * len(active_players)
+            current_player_idx = 0
+            return True
 
-        if hmsysteme.hit_detected():
-            hit_for_screenshot = True
-            pos = hmsysteme.get_pos()
-            mausx = pos[0]
-            mausy = pos[1]
-            Diabolo_Rect = pygame.Rect(mausx - 9, mausy - 9, 18, 18)
-            screen.blit(Diabolo, Diabolo_Rect)
+        # Finale
+        if len(active_players) == 2:
+            a, b = round_hits
+            if a and not b:
+                eliminated_set.add(active_players[1]); show_winner(active_players[0]); return False
+            if b and not a:
+                eliminated_set.add(active_players[0]); show_winner(active_players[1]); return False
+            round_hits[:] = [None, None]; current_player_idx = 0; return True
 
-            Evaluation()
+        if len(active_players) == 1:
+            show_winner(active_players[0]); return False
+        return True
 
-        # Screenshot
-        if hit_for_screenshot:
-            screen.blit(Diabolo, Diabolo_Rect)
-            pygame.display.flip()
-            hmsysteme.take_screenshot(screen)
-            hit_for_screenshot = False
+    # -------- Main Loop --------
+    reset_all_fruits()
+    running = True
+    while running and hm_game_active():
+        for ev in pygame.event.get():
+            if ev.type == pygame.QUIT or (ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE):
+                running = False
+            elif ev.type == pygame.MOUSEBUTTONDOWN:
+                mx, my = ev.pos
+                hit, f = evaluate_shot(mx, my)
+                hm_screenshot(screen)
+                running = advance_turn(hit, f)
+        # HM parallel
+        if running and hm_hit_detected():
+            pos = hm_get_pos()
+            if pos:
+                mx, my = pos
+                hit, f = evaluate_shot(mx, my)
+                hm_screenshot(screen)
+                running = advance_turn(hit, f)
 
-        #check if all fruits are done
-        checkTargets()
-        #Zeichnen
-        zeichnen()
+        draw_scene_and_flip()
+        clock.tick(FPS_LIMIT)
 
-        if xCoulourStart:
-            iColourCount += 1
-            if iColourCount == 30:
-                hmsysteme.put_rgbcolor((0, 0, 0))
-                xCoulourStart = False
-                iColourCount = 0
+    pygame.quit()
 
-        clock.tick(framerate)
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-
-
