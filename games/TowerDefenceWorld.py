@@ -602,16 +602,21 @@ def load_level_spec(world, level_folder, subname, enemies_dict):
         if "only_spawn_id" in o: rule["only_spawn_id"] = str(o["only_spawn_id"])
         overlay_rules.append(rule)
 
-    # --- PATCH: Boss-Konfig auch am Top-Level erlauben -------------------------
+    # --- am Ende von load_level_spec(...) vor dem return ---
     level_mods = data.get("mods") or {}
+
+    # Boss-Konfig separat ablegen (für LevelState.attach_boss_from_level_cfg)
     if isinstance(data.get("boss"), dict):
         level_mods["__boss_cfg__"] = dict(data["boss"])
 
-    # NEU: Falls in mods fälschlich "boss" steht, nach __boss_cfg__ umziehen/mergen
-    if isinstance(level_mods.get("boss"), dict):
-        moved = dict(level_mods.pop("boss"))
-        level_mods["__boss_cfg__"] = {**moved, **(level_mods.get("__boss_cfg__") or {})}
-    # --------------------------------------------------------------------------
+    # Boss-Intro (Bild links / Text rechts)
+    if isinstance(data.get("boss_intro"), dict):
+        bi = data["boss_intro"]
+        level_mods["__boss_intro__"] = {
+            "show": bool(bi.get("show", True)),
+            "text": str(bi.get("text") or ""),
+            "bg_alpha": int(bi.get("bg_alpha", 200)),
+        }
 
     return paths, waves, overlay_rules, level_mods
 
@@ -1172,14 +1177,41 @@ class LevelState:
         self._attack_msg_shadow = self.font_end.render(str(text), True, (0, 0, 0))
 
     def prepare_boss_intro_from_level(self):
-        if self.boss:
-            self.boss_intro_active = True
-            self.waiting_start = True
-            intro = (self.mods.get("boss_intro") or {}) if isinstance(self.mods.get("boss_intro"), dict) else {}
-            self.boss_intro_text = intro.get("text", "")
-            self.boss_intro_alpha = int(intro.get("bg_alpha", 200))
-            # Bild optional selbst setzen (z.B. erstes Attack-Frame):
-            self.boss_intro_img = self.boss.frames[0]
+        """
+        Aktiviert das Boss-Intro-Overlay:
+        - Bild links aus Enemies/<enemy>/intro.png
+        - Text rechts aus level_json["boss_intro"]["text"]
+        """
+        if not self.boss:
+            return
+
+        cfg_intro = (self.mods.get("__boss_intro__") or {})
+        if not bool(cfg_intro.get("show", True)):
+            # kein Intro gewünscht
+            self.boss_intro_active = False
+            return
+
+        # Bild aus dem Enemies-Ordner des Bosses laden
+        enemy = (self.mods.get("__boss_cfg__") or {}).get("enemy") or "TheSmith"
+        folder = os.path.join(ASSET_ROOT, "pics/TowerDefence", "Enemies", enemy)
+        p_intro = os.path.join(folder, "intro.png")
+        img = try_load(p_intro)
+
+        # sanft auf max. ~70% Höhe skalieren (optional, falls groß)
+        if img:
+            max_h = int(HEIGHT * 0.70)
+            if img.get_height() > max_h:
+                scale = max_h / float(img.get_height())
+                img = pygame.transform.smoothscale(
+                    img, (int(img.get_width() * scale), max_h)
+                )
+
+        self.boss_intro_img = img  # linke Seite
+        self.boss_intro_text = str(cfg_intro.get("text") or "")  # rechte Seite
+        self.boss_intro_alpha = int(cfg_intro.get("bg_alpha", 200))
+
+        self.boss_intro_active = True
+        self.waiting_start = True  # Intro offen ⇒ wir warten auf ENTER/Auto-Start
 
     def trigger_attack_shout(self):
         if self.boss:
@@ -1712,6 +1744,16 @@ def main():
                     if pfx.finished():
                         state.power_fx.remove(pfx)
 
+            # Boss-Animation updaten + Text-Timer runterzählen
+            if getattr(state, "boss", None):
+                state.boss.update(dt)
+
+            if getattr(state, "attack_msg_t", 0.0) > 0.0:
+                state.attack_msg_t = max(0.0, state.attack_msg_t - dt)
+
+            if getattr(state, "end_shout_t", 0.0) > 0.0:
+                state.end_shout_t = max(0.0, state.end_shout_t - dt)
+
             # Game Over?
             if not state.game_over and state.escapes > state.max_escapes:
                 state.game_over = True
@@ -1766,14 +1808,14 @@ def main():
                 for eff in state.effects:
                     eff.draw(screen)
 
-                # Overlays
+                # Boss
+                if getattr(state, "boss", None):
+                    state.boss.draw(screen)
+
+                # Overlays (jetzt ganz oben)
                 for ov in state.overlays:
                     if ov["active"]:
                         screen.blit(ov["surf"], (0, 0))
-
-                # Boss ÜBER den Overlays
-                if getattr(state, "boss", None):
-                    state.boss.draw(screen)
 
                 # Floater/PowerFX/HUD
                 for ft in state.floaters:
