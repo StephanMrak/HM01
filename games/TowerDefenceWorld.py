@@ -1,24 +1,6 @@
-# Minimal Tower Defence core built for Pi Zero 2 performance.
-# - Enemies are defined in pics/TowerDefence/Enemies/<Type> with walk/death (optional hit)
-#   JSON atlases. Their local config.json now contains ONLY: walk_fps, death_fps, hit_fps, headshot_top.
-# - Per level (Sublevel.waves.json) you set: paths, spawns, overlays and also move_speed/scale
-#   via "mods" (all/type) or per spawn entry.
-# - HP/Score/headshot_mul/headshot_instant_kill also come from the level JSON.
-#
-# Controls:
-#   ENTER  - start the level / continue to next level after overlay
-#   N      - (debug) skip to next sublevel/level
-#   ESC    - quit
-#   Mouse  - shoot
-#
-# Perf tips for Pi Zero 2:
-# - all scaled atlases are cached per type&scale; images are only rescaled once.
-# - cull enemies offscreen; hit animation pauses movement but uses same framesets.
-# - effects are lightweight and bounded.
-
 import os, re, math, json, random, pygame
 
-# ===== Optional: HM-Systeme integration =======================================
+# ===== HM-Systeme (optional) ==================================================
 try:
     import hmsysteme
     HAS_HM = True
@@ -32,10 +14,7 @@ def hm_game_active():
     return True
 
 def hm_hit_detected():
-    try:
-        return HAS_HM and hasattr(hmsysteme, "hit_detected") and hmsysteme.hit_detected()
-    except Exception:
-        return False
+    return HAS_HM and hasattr(hmsysteme, "hit_detected") and hmsysteme.hit_detected()
 
 def hm_get_pos():
     if HAS_HM and hasattr(hmsysteme, "get_pos"):
@@ -43,24 +22,24 @@ def hm_get_pos():
         except Exception: pass
     return None
 
-# ===== Global settings =========================================================
+# ===== Basis / Performance =====================================================
 WIDTH, HEIGHT = 1366, 768
 FPS = 30
 ASSET_ROOT = os.path.dirname(os.path.realpath(__file__))
 
-# Explosion tuning
+# Explosion (rot), leichtgewichtig
 EXP_DURATION = 0.9
-GRAVITY      = 1300.0
-MAX_SHARDS   = 24
-SPARK_COUNT  = 38
-FLASH_MS     = 100
-SHAKE_MS     = 180
-SHAKE_AMPL   = 10
+GRAVITY = 1300.0
+MAX_SHARDS = 24
+SPARK_COUNT = 38
+FLASH_MS = 100
+SHAKE_MS = 180
+SHAKE_AMPL = 10
 
-# Overlays block when alpha above this
-OVERLAY_BLOCK_ALPHA = 20  # 0..255
+# Overlays
+OVERLAY_BLOCK_ALPHA = 20  # ab welcher Alpha ein Overlay Klicks blockt (0..255)
 
-# ===== Helper utilities ========================================================
+# ===== Helpers =================================================================
 def try_load(path):
     try: return pygame.image.load(path).convert_alpha()
     except Exception: return None
@@ -69,16 +48,16 @@ def natural_key(s):
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', s)]
 
 def load_json_relaxed(path):
-    """Allow // and /**/ comments and trailing commas in JSON files."""
+    """Erlaubt //- und /**/-Kommentare + trailing commas."""
     with open(path, "r", encoding="utf-8") as f:
         s = f.read()
-    s = re.sub(r"/\*.*?\*/", "", s, flags=re.S)   # block comments
-    s = re.sub(r"//.*?$", "", s, flags=re.M)      # line comments
-    s = re.sub(r",\s*([}\]])", r"\1", s)          # trailing commas
+    s = re.sub(r"/\*.*?\*/", "", s, flags=re.S)       # Blockkommentare
+    s = re.sub(r"//.*?$", "", s, flags=re.M)          # Zeilenkommentare
+    s = re.sub(r",\s*([}\]])", r"\1", s)              # trailing commas
     return json.loads(s)
 
 def _compute_anchors(frames_by_dir):
-    """Anchor per direction = lower center of bounding area (frame 0)."""
+    """Fußpunkt-Anker = unterer Mittelpunkt des sichtbaren Bereichs (Frame 0)."""
     anchors = {}
     for d, frames in frames_by_dir.items():
         if not frames:
@@ -92,9 +71,10 @@ def _compute_anchors(frames_by_dir):
     return anchors
 
 def load_grid_atlas(json_path, image_dir, fallbacks=()):
-    """Load a grid atlas (frames_per_dir × dirs rows). Supports frame/spacing/margin."""
+    """Grid-Atlas mit optional frame_width/-height, spacing(_x/_y), margin(_x/_y)."""
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
+
     grid = data["grid"]; dirs = grid["dirs"]; fpd = int(grid["frames_per_dir"])
     meta = data.get("meta", {}) or {}
     imgname = meta.get("image") or ""
@@ -152,7 +132,7 @@ def scale_atlas(atlas, scale):
     return atlas
 
 def atlas_from_sheet_like_walk(sheet, walk_atlas):
-    """Create a simple atlas from a hit.png using walk atlas dimensions."""
+    """Fallback: baue 'hit'-Atlas aus hit.png mit den Maßen des walk-Atlas."""
     fw, fh = walk_atlas["fw"], walk_atlas["fh"]
     dirs = walk_atlas["dirs"]
     fpd  = len(next(iter(walk_atlas["frames"].values())))
@@ -165,11 +145,12 @@ def atlas_from_sheet_like_walk(sheet, walk_atlas):
             x = c*fw; y = r*fh
             if x+fw>sheet_w or y+fh>sheet_h: break
             img = sheet.subsurface(pygame.Rect(x,y,fw,fh)).copy()
-            frames[d].append(img); masks[d].append(pygame.mask.from_surface(img))
+            frames[d].append(img)
+            masks[d].append(pygame.mask.from_surface(img))
     anchors = _compute_anchors(frames)
     return {"frames":frames,"masks":masks,"fw":fw,"fh":fh,"dirs":dirs,"anchors":anchors}
 
-# ---- Level paths / waves ------------------------------------------------------
+# ---- Pfade/Waves aus waves.json ----------------------------------------------
 def _normalize_paths_struct(obj):
     if not isinstance(obj, dict): return {}
     if "paths" in obj and isinstance(obj["paths"], list):
@@ -200,7 +181,7 @@ def _dedupe_close_points(pts, eps=0.5):
             out.append((x,y))
     return out
 
-# ===== Text helper =============================================================
+# ===== Text mit Outline ========================================================
 def blit_text_outline(screen, font, text, pos, color=(255,255,255), outline=(0,0,0), w=2, align_right=True):
     base = font.render(text, True, color)
     bx, by = pos
@@ -216,6 +197,20 @@ def blit_text_outline(screen, font, text, pos, color=(255,255,255), outline=(0,0
                 if dx == 0 and dy == 0: continue
                 place(out, dx, dy)
     place(base, 0, 0)
+
+def wrap_lines(font, text, max_width):
+    words = text.split()
+    lines, line = [], []
+    for w in words:
+        test = " ".join(line + [w])
+        if font.size(test)[0] <= max_width or not line:
+            line.append(w)
+        else:
+            lines.append(" ".join(line))
+            line = [w]
+    if line:
+        lines.append(" ".join(line))
+    return lines
 
 # ===== Floating score text =====================================================
 class FloatingText:
@@ -234,7 +229,7 @@ class FloatingText:
         screen.blit(self.surf,   (int(self.x),   int(self.y)))
     def finished(self): return self.t >= self.dur
 
-# ===== Power up FX =============================================================
+# ===== Power-up Effekt =========================================================
 class PowerUpEffect:
     def __init__(self, msg="Firepower +1!", duration=1.8):
         self.msg = msg; self.t = 0.0; self.dur = float(duration)
@@ -257,12 +252,13 @@ class PowerUpEffect:
         screen.blit(shadow, (tx+3, ty+3)); screen.blit(text, (tx, ty))
     def finished(self): return self.t >= self.dur
 
-# ===== Explosion Effect ========================================================
+# ===== Explosion ===============================================================
 class Shard:
     __slots__=("surf","x","y","vx","vy","angle","omega","alpha")
     def __init__(self,surf,x,y,vx,vy,angle,omega):
         self.surf=surf; self.x=x; self.y=y; self.vx=vx; self.vy=vy
         self.angle=angle; self.omega=omega; self.alpha=255
+
 class Spark:
     __slots__=("x","y","vx","vy","life","r")
     def __init__(self,x,y,vx,vy,life,r):
@@ -347,9 +343,113 @@ class ExplosionEffect:
     def finished(self):
         return self.tms >= max(int(EXP_DURATION*1000), len(self.death_frames)*self.death_ms)
 
-# ===== Gameplay/config defaults ===============================================
+class HitPopEffect:
+    """Leichte Treffer-Explosion (Ring + Funken), ohne Shards/Death-Frames."""
+    def __init__(self, feet_pos, duration=0.35, spark_count=18):
+        self.feet = (int(feet_pos[0]), int(feet_pos[1]))
+        self.dur = float(duration)
+        self.t = 0.0
+        self.sparks = []
+        cx, cy = self.feet
+        for _ in range(spark_count):
+            ang = random.uniform(0, 2*math.pi)
+            spd = random.uniform(380, 700)
+            vx = math.cos(ang) * spd
+            vy = math.sin(ang) * spd - random.uniform(60, 160)
+            life = random.uniform(0.18, 0.32)
+            r = random.randint(2, 3)
+            self.sparks.append(Spark(cx, cy, vx, vy, life, r))
+
+    def update(self, dt):
+        self.t += dt
+        for sp in list(self.sparks):
+            sp.life -= dt
+            sp.x += sp.vx * dt
+            sp.y += sp.vy * dt
+            sp.vx *= 0.985
+            sp.vy += GRAVITY * 0.55 * dt
+            if sp.life <= 0:
+                self.sparks.remove(sp)
+
+    def draw(self, screen):
+        # kurzer Ring-Flash am Anfang
+        if self.t <= 0.18:
+            k = self.t / 0.18
+            radius = int(12 + 90 * k)
+            alpha = max(0, int(160 * (1.0 - k)))
+            ring = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            pygame.draw.circle(ring, (255, 255, 255, alpha), self.feet, radius, 3)
+            screen.blit(ring, (0, 0))
+        # Funken
+        for sp in self.sparks:
+            if sp.life > 0:
+                pygame.draw.circle(screen, (255, 60, 60), (int(sp.x), int(sp.y)), sp.r)
+
+    def finished(self):
+        return self.t >= self.dur and not self.sparks
+
+
+# ===== Lightweight BossProp (statischer Boss + kurze Attack-Animation) =====
+# ===== Lightweight BossProp (statischer Boss + kurze Attack-Animation) =====
+class BossProp:
+    def __init__(self, frames_south, anchor_south, feet_pos, fps=10, scale=1.0):
+        self.frames = [f.convert_alpha() for f in frames_south]
+        self.anchor = anchor_south
+        # Einmalige Skalierung
+        if abs(scale - 1.0) > 1e-3:
+            scaled = []
+            for img in self.frames:
+                w = int(img.get_width() * scale)
+                h = int(img.get_height() * scale)
+                scaled.append(pygame.transform.smoothscale(img, (w, h)))
+            self.frames = scaled
+            self.anchor = (int(self.anchor[0] * scale), int(self.anchor[1] * scale))
+
+        self.fx, self.fy = float(feet_pos[0]), float(feet_pos[1])
+        self.idx = 0
+        self.playing = False
+        self.fps = float(fps)
+        self.t = 0.0
+        self.play_t_remain = 0.0  # für play_for()
+
+    def set_feet(self, feet_pos):
+        self.fx, self.fy = float(feet_pos[0]), float(feet_pos[1])
+
+    # kurze Attack-Animation (einmal durchlaufen)
+    def play(self, seconds=None):
+        self.playing = True
+        self.t = 0.0
+        if seconds is None:
+            seconds = max(0.7, len(self.frames) / max(1.0, self.fps))
+        self.play_t_remain = float(seconds)
+        return self.play_t_remain
+
+    # kompatibel zu LevelState.trigger_attack_shout()
+    def play_for(self, seconds):
+        return self.play(seconds)
+
+    def update(self, dt):
+        if not self.playing:
+            return
+        self.t += dt
+        self.play_t_remain -= dt
+        # Frame-Advance
+        fcount = max(1, len(self.frames))
+        self.idx = min(fcount - 1, int(self.t * self.fps))
+        if self.play_t_remain <= 0.0:
+            self.playing = False
+            self.idx = 0
+
+    def draw(self, screen):
+        img = self.frames[self.idx if self.playing else 0]
+        ax, ay = self.anchor
+        tlx = int(self.fx - ax)
+        tly = int(self.fy - ay)
+        screen.blit(img, (tlx, tly))
+
+# ===== Gegner / Konfig ========================================================
 def read_global_enemy_cfg():
-    """Optional: global per-type overrides (frames/headshot_top only)."""
+    """Optional: globale Defaults für fps/headshot_top (keine HP/Score/Speed/Scale)."""
     p = os.path.join(ASSET_ROOT, "pics/TowerDefence/Enemies/config.json")
     if os.path.isfile(p):
         try: return load_json_relaxed(p)
@@ -357,7 +457,7 @@ def read_global_enemy_cfg():
     return {}
 
 def read_gameplay_cfg():
-    """Global gameplay defaults (fallbacks for levels)."""
+    """Spielweite Defaults & Upgrades (nur Fallbacks für Level)."""
     p = os.path.join(ASSET_ROOT, "pics/TowerDefence/gameplay.json")
     cfg = {
         "base_firepower": 1,
@@ -367,17 +467,238 @@ def read_gameplay_cfg():
         "default_hp": 3,
         "default_score": 10,
         "default_headshot_mul": 2.0,
-        "default_speed": 95.0,   # NEW: speed fallback
-        "default_scale": 1.0     # NEW: scale fallback
+        "default_speed": 95.0,
+        "default_scale": 1.0
     }
     if os.path.isfile(p):
         try: cfg.update(load_json_relaxed(p))
         except Exception as e: print("[WARN] gameplay.json fehlerhaft:", e)
     return cfg
 
-# ===== EnemyType and Enemy =====================================================
+# ===== WORLDS LAYER ============================================================
+def discover_worlds():
+    """Findet Welten in pics/TowerDefence/Worlds/<World>"""
+    root = os.path.join(ASSET_ROOT, "pics/TowerDefence/Worlds")
+    worlds = []
+    if os.path.isdir(root):
+        for w in sorted(os.listdir(root)):
+            if os.path.isdir(os.path.join(root, w)):
+                worlds.append(w)
+    return worlds
+
+def world_full_image(world):
+    p = os.path.join(ASSET_ROOT, "pics/TowerDefence/Worlds", world, f"{world}_full.png")
+    return try_load(p)
+
+def discover_levels(world):
+    """Gibt Levelordner zurück (Level1, Level2, ...) die PNG-Sublevel enthalten."""
+    base = os.path.join(ASSET_ROOT, "pics/TowerDefence/Worlds", world)
+    levels = []
+    if not os.path.isdir(base): return levels
+    for name in sorted(os.listdir(base), key=natural_key):
+        p = os.path.join(base, name)
+        if not os.path.isdir(p): continue
+        imgs = [f for f in os.listdir(p) if f.lower().endswith(".png") and not f.lower().startswith("overlay") and "_full" not in f.lower()]
+        if imgs:
+            levels.append(name)
+    return levels
+
+def discover_sublevels(world, level_folder):
+    p = os.path.join(ASSET_ROOT, "pics/TowerDefence/Worlds", world, level_folder)
+    if not os.path.isdir(p): return []
+    imgs = []
+    for f in os.listdir(p):
+        lf = f.lower()
+        if not lf.endswith(".png"): continue
+        if lf.startswith("overlay") or ".overlay" in lf: continue
+        if "_full" in lf: continue
+        imgs.append(f)
+    imgs.sort(key=natural_key)
+    return [(os.path.splitext(f)[0], os.path.join(p, f)) for f in imgs]
+
+# ===== Level/Waves: Pfade, Spawns, Overlay-Regeln =============================
+def load_level_spec(world, level_folder, subname, enemies_dict):
+    """Liest <Sublevel>.waves.json und liefert (paths, waves, overlay_rules, mods).
+       - Unterstützt {waves:[{label,require_enter,mods,spawns:[...]},...]}
+       - Fällt zurück auf {spawns:[...]} als eine einzige Welle."""
+    def cand(name):
+        base = os.path.join(ASSET_ROOT, "pics/TowerDefence/Worlds", world, level_folder)
+        return os.path.join(base, f"{name}.waves.json")
+    path = None
+    for nm in (subname,
+               subname.lower().replace("burma","bruma").title() if "burma" in subname.lower() else subname,
+               subname.lower().replace("bruma","burma").title() if "bruma" in subname.lower() else subname):
+        p = cand(nm)
+        if os.path.isfile(p): path = p; break
+
+    if not path:
+        base = {"0":[(100,HEIGHT-60),(WIDTH-100,60)]}
+        return base, [], [], {}
+
+    try:
+        data = load_json_relaxed(path)
+    except Exception as e:
+        print("[WARN] waves.json fehlerhaft:", e)
+        return {"0":[(100,HEIGHT-60),(WIDTH-100,60)]}, [], [], {}
+
+    raw = _normalize_paths_struct(data) or {"0":[(100,HEIGHT-60),(WIDTH-100,60)]}
+    raw = {k:_dedupe_close_points(v, 0.5) for k,v in raw.items()}
+    paths = {str(k).lower(): v for k,v in raw.items()}
+
+    def normalize_spawns(spawns):
+        q=[]
+        for s in spawns or []:
+            if not isinstance(s, dict): continue
+            typ = s.get("type","Zombie")
+            if typ not in enemies_dict:
+                print(f"[WARN] Unbekannter Gegnertyp '{typ}' in waves."); continue
+            key = str(s.get("path","0")).lower()
+            if key not in paths:
+                print(f"[WARN] Spawn-Pfad '{s.get('path')}' nicht gefunden. Nutze ersten verfügbaren.")
+                key = next(iter(paths.keys()))
+            base = {"t": float(s.get("t",0)), "type": typ, "path": key}
+            if "id" in s: base["id"] = str(s["id"])
+            # optionale Felder inkl. Aura
+            for fld in ("hp","hp_mul","score","score_mul","headshot_mul","headshot_instant_kill","move_speed","scale","aura"):
+                if fld in s: base[fld] = s[fld]
+            # count/interval-Expansion
+            cnt = int(s.get("count",1)); iv = float(s.get("interval",0))
+            for i in range(cnt):
+                e2 = dict(base); e2["t"] = base["t"] + i*iv; q.append(e2)
+        q.sort(key=lambda x:x["t"]); return q
+
+    waves=[]
+    if isinstance(data.get("waves"), list) and data["waves"]:
+        for w in data["waves"]:
+            waves.append({
+                "label": w.get("label",""),
+                "require_enter": bool(w.get("require_enter", False)),
+                "mods": w.get("mods") or {},
+                "spawns": normalize_spawns(w.get("spawns"))
+            })
+    else:
+        waves.append({
+            "label": data.get("title",""),
+            "require_enter": True,
+            "mods": {},
+            "spawns": normalize_spawns(data.get("spawns") or [])
+        })
+
+    # Overlays (wie bisher)
+    overlay_rules = []
+    for o in data.get("overlays", []):
+        if not isinstance(o, dict): continue
+        fname = o.get("file")
+        if not fname: continue
+        rule = {"file": fname, "active": bool(o.get("active", True)), "blocks": bool(o.get("blocks", True))}
+        act = o.get("activate_at")
+        if isinstance(act, dict) and "x" in act and "y" in act:
+            rule["activate_at"] = {"x": float(act["x"]), "y": float(act["y"]), "radius": float(act.get("radius", 24))}
+            rule["active"] = False
+        elif isinstance(act, (list, tuple)) and len(act) >= 2:
+            rule["activate_at"] = {"x": float(act[0]), "y": float(act[1]), "radius": float(o.get("radius", 24))}
+            rule["active"] = False
+        if "only_type" in o: rule["only_type"] = str(o["only_type"])
+        if "only_spawn_id" in o: rule["only_spawn_id"] = str(o["only_spawn_id"])
+        overlay_rules.append(rule)
+
+    # --- PATCH: Boss-Konfig auch am Top-Level erlauben -------------------------
+    level_mods = data.get("mods") or {}
+    if isinstance(data.get("boss"), dict):
+        level_mods["__boss_cfg__"] = dict(data["boss"])
+
+    # NEU: Falls in mods fälschlich "boss" steht, nach __boss_cfg__ umziehen/mergen
+    if isinstance(level_mods.get("boss"), dict):
+        moved = dict(level_mods.pop("boss"))
+        level_mods["__boss_cfg__"] = {**moved, **(level_mods.get("__boss_cfg__") or {})}
+    # --------------------------------------------------------------------------
+
+    return paths, waves, overlay_rules, level_mods
+
+
+# ===== Overlays laden (mit Regeln) ============================================
+def load_overlays(world, level_folder, subname, overlay_rules):
+    """Sucht overlay*.png/<subname>.overlay*.png und verheiratet sie mit overlay_rules."""
+    folder = os.path.join(ASSET_ROOT, "pics/TowerDefence/Worlds", world, level_folder)
+    if not os.path.isdir(folder): return []
+
+    files = sorted(os.listdir(folder))
+    found = []
+    sub_low = subname.lower()
+    for f in files:
+        lf = f.lower()
+        if lf.endswith(".png") and (lf.startswith("overlay") or ".overlay" in lf):
+            found.append(f)
+
+    overlays=[]
+    rmap = {r["file"].lower(): r for r in overlay_rules}
+    for f in found:
+        p = os.path.join(folder, f)
+        img = try_load(p)
+        if not img: continue
+        if img.get_size() != (WIDTH, HEIGHT):
+            img = pygame.transform.smoothscale(img, (WIDTH, HEIGHT))
+        rule = rmap.get(f.lower()) or rmap.get((sub_low + "." + f).lower())
+        if rule:
+            trigger = rule.get("activate_at")
+            tr = {"x": trigger["x"], "y": trigger["y"], "r": trigger["radius"]} if trigger else None
+            overlays.append({"surf": img, "active": bool(rule.get("active", True)),
+                             "blocks": bool(rule.get("blocks", True)), "trigger": tr,
+                             "only_type": rule.get("only_type"), "only_spawn_id": rule.get("only_spawn_id")})
+        else:
+            overlays.append({"surf": img, "active": True, "blocks": True, "trigger": None,
+                             "only_type": None, "only_spawn_id": None})
+    return overlays
+
+# ===== Titel-Helfer ============================================================
+def get_level_title(world, level_folder, subname):
+    """Liest optional "title" aus <Sublevel>.waves.json.
+    Fallback: "<LevelOrdner> — <SublevelName>"."""
+    try:
+        base = os.path.join(ASSET_ROOT, "pics/TowerDefence/Worlds", world, level_folder)
+        path = os.path.join(base, f"{subname}.waves.json")
+        if os.path.isfile(path):
+            data = load_json_relaxed(path)
+            t = data.get("title")
+            if isinstance(t, str) and t.strip():
+                return t.strip()
+    except Exception:
+        pass
+    # Default
+    return f"{level_folder} — {subname}"
+
+# ===== Level-Ende Overlay ======================================================
+class LevelEndOverlay:
+    def __init__(self, stats, next_label):
+        self.stats = stats; self.next_label = next_label
+    def draw(self, screen, font_big, font_hud):
+        overlay = pygame.Surface((WIDTH,HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0,0,0,160)); screen.blit(overlay,(0,0))
+        title = font_big.render("Level beendet", True, (220,255,220))
+        screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//2 - 170))
+        lines = [
+            f"Firepower: {self.stats['firepower']}",
+            f"Score: {self.stats['score']}",
+            f"Erledigt: {self.stats['kills']}",
+            f"Durchgelassen: {self.stats['escapes']}/{self.stats['max_escapes']}"
+        ]
+        y = HEIGHT//2 - 80
+        for s in lines:
+            txt = font_hud.render(s, True, (235,235,235))
+            sh  = font_hud.render(s, True, (0,0,0))
+            screen.blit(sh,  (WIDTH//2 - sh.get_width()//2 + 2, y + 2))
+            screen.blit(txt, (WIDTH//2 - txt.get_width()//2, y))
+            y += txt.get_height() + 10
+        nxt = font_hud.render(f"Weiter zu: {self.next_label}", True, (255,255,200))
+        screen.blit(nxt, (WIDTH//2 - nxt.get_width()//2, y + 16))
+        hint = font_hud.render("Drücke ENTER, um fortzufahren", True, (255,255,255))
+        sh   = font_hud.render("Drücke ENTER, um fortzufahren", True, (0,0,0))
+        screen.blit(sh,   (WIDTH//2 - sh.get_width()//2 + 2, y + 50 + 2))
+        screen.blit(hint, (WIDTH//2 - hint.get_width()//2,    y + 50))
+# ===== Gegner-Klassen ==========================================================
 class EnemyType:
-    """Loads atlases. Local config.json now ONLY: fps + headshot_top. scale/speed from level."""
+    """Lädt Walk/Death (+ optional Hit). FPS/Kopfzone aus config.json.
+       Scale/Speed kommen pro Level/Spawn aus waves.json."""
     def __init__(self, name, folder, global_cfg):
         self.name = name
         base = name.lower()
@@ -386,31 +707,36 @@ class EnemyType:
         self.walk  = load_grid_atlas(walk_json,  folder, fallbacks=("zWalk.png",))
         self.death = load_grid_atlas(death_json, folder, fallbacks=("zDeath.png",))
 
-        # optional: hit
+        # Optional: Hit-Animation
         self.hit = None
         hit_json = os.path.join(folder, f"{base}_hit.json")
-        hit_img  = os.path.join(folder, "hit.png")
+        try_img = os.path.join(folder, "hit.png")
         if os.path.isfile(hit_json):
-            try: self.hit = load_grid_atlas(hit_json, folder, fallbacks=("hit.png",))
-            except Exception as e: print(f"[WARN] {name}: hit-json konnte nicht geladen werden: {e}")
-        elif os.path.isfile(hit_img):
-            sheet = try_load(hit_img)
+            try:
+                self.hit = load_grid_atlas(hit_json, folder, fallbacks=("hit.png",))
+            except Exception as e:
+                print(f"[WARN] {name}: hit-json konnte nicht geladen werden: {e}")
+        elif os.path.isfile(try_img):
+            sheet = try_load(try_img)
             if sheet:
                 self.hit = atlas_from_sheet_like_walk(sheet, self.walk)
 
-        # local cfg
+        # Lokale/Globale Konfigs (nur fps + Kopfzone)
         cfg = {}
         local_cfg_path = os.path.join(folder, "config.json")
         if os.path.isfile(local_cfg_path):
             try: cfg = load_json_relaxed(local_cfg_path)
             except Exception as e: print(f"[WARN] {name}/config.json fehlerhaft: {e}")
         cfg = {**(global_cfg.get(name, {})), **cfg}
+        # komplette, zusammengeführte Gegner-Config für spätere Features merken
+        self.cfg_full = dict(cfg)
 
         self.walk_fps     = float(cfg.get("walk_fps", 10.0))
         self.hit_fps      = float(cfg.get("hit_fps", 10.0))
         self.death_fps    = int(cfg.get("death_fps", 12))
         self.headshot_top = float(cfg.get("headshot_top", 0.22))
 
+        # Skalierungs-Cache
         self._scaled_cache = {1.0: {"walk": self.walk, "death": self.death, "hit": self.hit}}
 
     def _clone_atlas(self, a):
@@ -435,8 +761,9 @@ class EnemyType:
 
 class Enemy:
     def __init__(self, etype: EnemyType, path_points,
-                 hp, score, headshot_mul=2.0, headshot_instant_kill=False,
-                 speed=95.0, scale=1.0):
+                 hp, score,
+                 headshot_mul=2.0, headshot_instant_kill=False,
+                 speed=95.0, scale=1.0, aura=None):
         self.etype = etype
         scaled = etype.get_scaled(scale)
         self.frames = scaled["walk"]["frames"]
@@ -446,6 +773,7 @@ class Enemy:
         self.walk_anchor  = scaled["walk"]["anchors"]
         self.death_anchor = scaled["death"]["anchors"]
         self.hit_anchor   = scaled["hit"]["anchors"] if scaled["hit"] else None
+        self._init_aura(aura)
 
         self.speed = float(speed)
         self.hp = int(hp)
@@ -460,6 +788,49 @@ class Enemy:
         self.hit_active=False; self.hit_index=0; self.hit_anim_accum=0.0
         self.spawn_id=None
 
+        # ---- Aura (optional, lazy-precompute pro Frame)
+        self.aura = None
+        if isinstance(aura, dict):
+            try:
+                rad = int(max(1, min(16, int(aura.get("radius", 0)))))
+                col = aura.get("color", [255, 215, 0, 150])
+                r, g, b, a = int(col[0]), int(col[1]), int(col[2]), int(col[3])
+                self.aura = {
+                    "radius": rad,
+                    "rgb": (r, g, b),
+                    "alpha": int(max(0, min(255, a))),
+                    "layers": {d: [None] * len(self.frames[d]) for d in self.frames},
+                    "t": 0.0,
+                    "freq": 0.5,  # Puls-Frequenz (Hz)
+                }
+            except Exception:
+                self.aura = None
+
+    def _init_aura(self, cfg):
+        """cfg = {"radius":8,"color":[r,g,b,a], "freq":0.8}"""
+        self.aura = None
+        if not isinstance(cfg, dict):
+            return
+        try:
+            rad = int(max(1, min(16, int(cfg.get("radius", 8)))))
+            col = cfg.get("color", [255, 215, 0, 150])
+            if len(col) >= 4:
+                r, g, b, a = [int(x) for x in col[:4]]
+            else:
+                r, g, b = [int(x) for x in col[:3]]
+                a = 150
+            freq = float(cfg.get("freq", 0.8))
+            self.aura = {
+                "radius": rad,
+                "rgb": (r, g, b),
+                "alpha": int(max(0, min(255, a))),
+                "freq": freq,
+                "t": 0.0,
+                "layers": {d: [None] * len(self.frames[d]) for d in self.frames},
+            }
+        except Exception:
+            self.aura = None
+
     def _dir_from_vec(self, dx,dy):
         ang = (math.degrees(math.atan2(-dy, dx)) + 360.0) % 360.0
         if   22.5<=ang<67.5:  return "NE"
@@ -471,9 +842,39 @@ class Enemy:
         elif 292.5<=ang<337.5:return "SE"
         else:                 return "E"
 
+    def _ensure_aura_layers(self, d, fidx):
+        """Baut für (Richtung d, Frame fidx) die skalierten Ring-Silhouetten.
+           Verwendet die vorhandene Walk-Maske -> echte Silhouette."""
+        if not self.aura: return None
+        layers = self.aura["layers"][d]
+        if layers[fidx] is not None:
+            return layers[fidx]
+
+        rad = self.aura["radius"]; (cr,cg,cb) = self.aura["rgb"]
+        frm = self.frames[d][fidx]; msk = self.masks[d][fidx]
+        w, h = frm.get_width(), frm.get_height()
+
+        # Basis-Silhouette in Farbe (Alpha 255), wird pro Ring skaliert
+        base = msk.to_surface(setcolor=(cr,cg,cb,255), unsetcolor=(0,0,0,0)).convert_alpha()
+
+        ring_surfs = [None]*(rad+1)  # Index = i (1..rad)
+        for i in range(1, rad+1):
+            # ring ist um i Pixel größer in beide Richtungen
+            ring = pygame.transform.smoothscale(base, (w + 2*i, h + 2*i))
+            ring_surfs[i] = ring
+
+        layers[fidx] = ring_surfs
+        return ring_surfs
+
     def update(self, dt):
+        # Aura-Zeit fortschreiben (und ggf. „reparieren“, falls jemand self.aura ersetzt hat)
+        if self.aura and ("t" not in self.aura or "layers" not in self.aura):
+            # self.aura enthält dann vermutlich nur die Roh-Config -> neu initialisieren
+            self._init_aura(self.aura)
+        if self.aura:
+            self.aura["t"] += dt
         if self.dead or self.seg >= len(self.path)-1: return
-        # Hit animation pauses movement
+        if self.aura: self.aura["t"] += dt
         if self.hit_active and self.hit_frames:
             self.hit_anim_accum += dt
             step_hit = 1.0 / max(1e-6, self.etype.hit_fps)
@@ -531,10 +932,32 @@ class Enemy:
         if (tlx + frm.get_width() < 0 or tlx > WIDTH or
             tly + frm.get_height() < 0 or tly > HEIGHT):
             return
+        # ---- Aura zeichnen (hinter dem Sprite)
+        if self.aura:
+            rings = self._ensure_aura_layers(self.dir, self.findex)
+            if rings:
+                # Pulsfaktor 0.7..1.0
+                t = self.aura["t"]; f = self.aura["freq"]
+                pulse = 0.7 + 0.25 * (0.5 * (1.0 + math.sin(2.0*math.pi*f*t)))
+                base_a = self.aura["alpha"]
+                rad = self.aura["radius"]
+
+                # Von außen nach innen, innerer Bereich deckender
+                for i in range(rad, 0, -1):
+                    ring = rings[i]
+                    if not ring: continue
+                    # Quadratische Falloff-Kurve: innen heller, außen transparenter
+                    inner = 1.0 - ((i-1)/rad)
+                    a = int(max(0, min(255, base_a * (inner*inner) * pulse)))
+                    ring.set_alpha(a)
+                    # Offset: größere Ringe beginnen weiter oben/links
+                    off = rad - i
+                    screen.blit(ring, (tlx - off, tly - off))
+
         screen.blit(frm,(tlx,tly))
 
     def _local_hit_pos(self, mx,my):
-        frm = self.frames[self.dir][self.findex]
+        frm = self.frames[self.dir][self.findex]  # Maske aus Walk (solide)
         ax, ay = self.walk_anchor[self.dir]
         tlx = int(self.fx - ax); tly = int(self.fy - ay)
         rx,ry = mx - tlx, my - tly
@@ -556,177 +979,218 @@ class Enemy:
         head_rect = pygame.Rect(br.x, br.y, br.w, head_h)
         return "head" if head_rect.collidepoint(rx,ry) else "body"
 
-# ===== Level load: paths, spawns, overlays, mods ==============================
-def load_level_spec(level_folder, subname, enemies_dict):
-    def cand(name):
-        return os.path.join(ASSET_ROOT,"pics/TowerDefence",level_folder,f"{name}.waves.json")
-    path = None
-    for nm in (subname,
-               subname.lower().replace("burma","bruma").title() if "burma" in subname.lower() else subname,
-               subname.lower().replace("bruma","burma").title() if "bruma" in subname.lower() else subname):
-        p = cand(nm)
-        if os.path.isfile(p): path = p; break
+# ===== Intro / World Select ====================================================
+def load_world_intro(world):
+    """Liest optional <World>_intro.json mit {highlight:{x,y,r}, text:"..." }"""
+    base = os.path.join(ASSET_ROOT, "pics/TowerDefence/Worlds", world)
+    p = os.path.join(base, f"{world}_intro.json")
+    data = {}
+    if os.path.isfile(p):
+        try: data = load_json_relaxed(p)
+        except Exception as e: print(f"[WARN] {world}_intro.json fehlerhaft:", e)
+    return data
 
-    if not path:
-        base = {"0":[(340,700),(900,170)]} if (level_folder.lower()=="level1" and subname.lower().startswith(("burma","bruma"))) \
-               else {"0":[(100,HEIGHT-60),(WIDTH-100,60)]}
-        return base, [], [], {}
+def draw_world_select(screen, worlds, sel_idx, font_title, font_item):
+    screen.fill((25,40,38))
+    title = font_title.render("Wähle eine Welt", True, (230,255,230))
+    screen.blit(title, (WIDTH//2 - title.get_width()//2, 24))
 
-    try:
-        data = load_json_relaxed(path)
-    except Exception as e:
-        print("[WARN] waves.json fehlerhaft:", e)
-        return {"0":[(100,HEIGHT-60),(WIDTH-100,60)]}, [], [], {}
+    # Layout: links 1/3 Textliste, rechts 2/3 Bild
+    margin  = 24
+    left_w  = WIDTH // 3
+    right_w = WIDTH - left_w - margin*2
+    right_h = HEIGHT - 180
 
-    raw = _normalize_paths_struct(data) or {"0":[(100,HEIGHT-60),(WIDTH-100,60)]}
-    raw = {k:_dedupe_close_points(v, 0.5) for k,v in raw.items()}
-    paths = {str(k).lower(): v for k,v in raw.items()}
+    # Liste links (1/3)
+    left_x = margin
+    top_y  = 110
+    for i, w in enumerate(worlds):
+        col = (255,255,255) if i==sel_idx else (200,200,200)
+        it  = font_item.render(w, True, col)
+        screen.blit(it, (left_x, top_y + i*(it.get_height()+10)))
 
-    spawns = data.get("spawns") or []
-    mods   = data.get("mods") or {}
+    # Preview rechts (2/3)
+    if worlds:
+        wname = worlds[sel_idx]
+        img = world_full_image(wname)
+        if img:
+            iw, ih = img.get_size()
+            # proportional auf 2/3-Bereich skalieren
+            scale = min(right_w / iw, right_h / ih)
+            img = pygame.transform.smoothscale(img, (int(iw*scale), int(ih*scale)))
+            # rechtsbündig in den 2/3-Bereich einsetzen
+            x = WIDTH - margin - img.get_width()
+            y = 100
+            screen.blit(img, (x, y))
 
-    q=[]
-    for s in spawns:
-        if not isinstance(s, dict): continue
-        typ = s.get("type","Zombie")
-        if typ not in enemies_dict:
-            print(f"[WARN] Unbekannter Gegnertyp '{typ}' in waves."); continue
-        key = str(s.get("path","0")).lower()
-        if key not in paths:
-            print(f"[WARN] Spawn-Pfad '{s.get('path')}' nicht gefunden. Nutze ersten verfügbaren.")
-            key = next(iter(paths.keys()))
-        entry = {"t": float(s.get("t",0)), "type": typ, "path": key}
-        if "id" in s: entry["id"] = str(s["id"])
-        # copy optional fields; defaults/overrides handled later
-        for fld in ("hp","hp_mul","score","score_mul","headshot_mul","headshot_instant_kill",
-                    "move_speed","scale"):
-            if fld in s: entry[fld] = s[fld]
-        cnt = int(s.get("count",1)); iv=float(s.get("interval",0))
-        for i in range(cnt):
-            e2 = dict(entry); e2["t"] = entry["t"] + i*iv
-            q.append(e2)
-    q.sort(key=lambda x:x["t"])
+    hint = font_item.render("ENTER = Start  •  Pfeile = Auswahl", True, (235,235,235))
+    screen.blit(hint, (WIDTH//2 - hint.get_width()//2, HEIGHT-50))
 
-    overlay_rules=[]
-    for o in data.get("overlays", []):
-        if not isinstance(o, dict): continue
-        fname = o.get("file")
-        if not fname: continue
-        rule = {"file": fname, "active": bool(o.get("active", True)), "blocks": bool(o.get("blocks", True))}
-        act = o.get("activate_at")
-        if isinstance(act, dict) and "x" in act and "y" in act:
-            rule["activate_at"] = {"x": float(act["x"]), "y": float(act["y"]), "radius": float(act.get("radius", 24))}
-            rule["active"] = False
-        elif isinstance(act, (list, tuple)) and len(act) >= 2:
-            rule["activate_at"] = {"x": float(act[0]), "y": float(act[1]), "radius": float(o.get("radius", 24))}
-            rule["active"] = False
-        if "only_type" in o: rule["only_type"] = str(o["only_type"])
-        if "only_spawn_id" in o: rule["only_spawn_id"] = str(o["only_spawn_id"])
-        overlay_rules.append(rule)
+def draw_world_intro(screen, wname, img_full, intro_cfg, t):
+    """Kurzer Einspieler: Zeige Karte, pulsiere Highlight und Text."""
+    screen.fill((0,0,0))
+    if img_full:
+        img = pygame.transform.smoothscale(img_full, (WIDTH, HEIGHT))
+        screen.blit(img, (0,0))
+    # Highlight
+    hi = (intro_cfg.get("highlight") if isinstance(intro_cfg.get("highlight"), dict) else {})
+    hx = hi.get("x", WIDTH//2); hy = hi.get("y", HEIGHT//2); hr = hi.get("r", 120)
+    # Puls
+    k = (math.sin(t*2.6)+1.0)/2.0
+    r  = int(hr * (0.85 + 0.25*k))
+    a  = int(120 + 80*k)
+    glow = pygame.Surface((r*2+2, r*2+2), pygame.SRCALPHA)
+    pygame.draw.circle(glow, (60,255,120,a), (r+1, r+1), r, 8)
+    screen.blit(glow, (hx - r, hy - r))
 
-    return paths, q, overlay_rules, mods
+    # Text
+    text = intro_cfg.get("text") or "Beschützen Sie die Statue in der Mitte."
+    font_big = pygame.font.SysFont(None, 58, bold=True)
+    font_small = pygame.font.SysFont(None, 28, bold=False)
 
-# ===== Overlays load (with matching rules) ====================================
-def load_overlays(level_folder, subname, overlay_rules):
-    folder = os.path.join(ASSET_ROOT, "pics/TowerDefence", level_folder)
-    if not os.path.isdir(folder): return []
-    files = sorted(os.listdir(folder))
-    found = []
-    sub_low = subname.lower()
-    for f in files:
-        lf = f.lower()
-        if lf.endswith(".png") and (lf.startswith("overlay") or ".overlay" in lf):
-            found.append(f)
-    overlays=[]
-    rmap = {r["file"].lower(): r for r in overlay_rules}
-    for f in found:
-        p = os.path.join(folder, f)
-        img = try_load(p)
-        if not img: continue
-        if img.get_size() != (WIDTH, HEIGHT):
-            img = pygame.transform.smoothscale(img, (WIDTH, HEIGHT))
-        rule = rmap.get(f.lower()) or rmap.get((sub_low + "." + f).lower())
-        if rule:
-            trigger = rule.get("activate_at")
-            tr = {"x": trigger["x"], "y": trigger["y"], "r": trigger["radius"]} if trigger else None
-            overlays.append({"surf": img, "active": bool(rule.get("active", True)),
-                             "blocks": bool(rule.get("blocks", True)), "trigger": tr,
-                             "only_type": rule.get("only_type"), "only_spawn_id": rule.get("only_spawn_id")})
-        else:
-            overlays.append({"surf": img, "active": True, "blocks": True, "trigger": None,
-                             "only_type": None, "only_spawn_id": None})
-    return overlays
+    msg = font_big.render(text, True, (255,255,210))
+    sh  = font_big.render(text, True, (0,0,0))
+    cx = WIDTH//2
+    screen.blit(sh,  (cx - sh.get_width()//2 + 2, 40 + 2))
+    screen.blit(msg, (cx - msg.get_width()//2, 40))
 
-# ===== Level end overlay =======================================================
-class LevelEndOverlay:
-    def __init__(self, stats, next_label):
-        self.stats = stats; self.next_label = next_label
-    def draw(self, screen, font_big, font_hud):
-        overlay = pygame.Surface((WIDTH,HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0,0,0,160)); screen.blit(overlay,(0,0))
-        title = font_big.render("Level beendet", True, (220,255,220))
-        screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//2 - 170))
-        lines = [
-            f"Firepower: {self.stats['firepower']}",
-            f"Score: {self.stats['score']}",
-            f"Erledigt: {self.stats['kills']}",
-            f"Durchgelassen: {self.stats['escapes']}/{self.stats['max_escapes']}"
-        ]
-        y = HEIGHT//2 - 80
-        for s in lines:
-            txt = font_hud.render(s, True, (235,235,235))
-            sh  = font_hud.render(s, True, (0,0,0))
-            screen.blit(sh,  (WIDTH//2 - sh.get_width()//2 + 2, y + 2))
-            screen.blit(txt, (WIDTH//2 - txt.get_width()//2, y))
-            y += txt.get_height() + 10
-        nxt = font_hud.render(f"Weiter zu: {self.next_label}", True, (255,255,200))
-        screen.blit(nxt, (WIDTH//2 - nxt.get_width()//2, y + 16))
-        hint = font_hud.render("Drücke ENTER, um fortzufahren", True, (255,255,255))
-        sh   = font_hud.render("Drücke ENTER, um fortzufahren", True, (0,0,0))
-        screen.blit(sh,   (WIDTH//2 - sh.get_width()//2 + 2, y + 50 + 2))
-        screen.blit(hint, (WIDTH//2 - hint.get_width()//2,    y + 50))
+    hint = font_small.render("Drücke ENTER, um Level 1 zu starten", True, (255,255,255))
+    sh2  = font_small.render("Drücke ENTER, um Level 1 zu starten", True, (0,0,0))
+    screen.blit(sh2, (cx - sh2.get_width()//2 + 2, HEIGHT - 70 + 2))
+    screen.blit(hint,(cx - hint.get_width()//2, HEIGHT - 70))
 
-# ===== Level State =============================================================
+# ===== LevelState ==============================================================
 class LevelState:
-    def __init__(self, bg, paths_dict, enemy_types, gameplay_cfg, spawn_queue, overlays, mods):
+    def __init__(self, bg, paths_dict, enemy_types, gameplay_cfg, waves, overlays, mods):
+        # --- Assets / Scene ---
         self.bg = bg
-        self.paths = paths_dict
-        self.enemy_types = enemy_types
+        self.paths = paths_dict                # {"0":[(x,y),...], ...}
+        self.enemy_types = enemy_types         # {"Zombie": EnemyType(...), ...}
+        self.overlays = overlays or []         # [{surf, active, blocks, trigger, ...}, ...]
         self.enemies = []
         self.effects = []
         self.floaters = []
         self.power_fx = []
-        self.overlays = overlays
-        self.spawn_queue = list(spawn_queue)
-        self.time = 0.0
+        self.paused = False
 
-        # Start gating
-        self.waiting_start = True
+        # --- Waves / Progress ---
+        self.waves = list(waves or [])
+        self.wave_index = 0
+        self.wave_time = 0.0
+        self.spawn_queue = []
+        self.current_wave_mods = {}
 
-        # Gameplay
-        self.gameplay_cfg = gameplay_cfg
+        # --- Start-/Intro-Steuerung ---
+        self.waiting_start = True              # wenn True → Start-Overlay (oder Boss-Intro)
+        self.boss_intro_active = False         # Intro-Bildschirm mit Boss rechts/links etc.
+
+        # --- Boss / Boss-Text ---
+        self.boss = None                       # wird über attach_boss_from_level_cfg gesetzt
+        self.attack_msg = "Angriff!!!"
+        self.attack_msg_t = 0.0                # >0.0 → im Render die „Angriff!!!“-Anzeige
+        self.end_msg = "Auf zum nächsten Angriffspunkt!"
+        self.end_shout_t = 0.0                 # >0.0 → End-Text anzeigen
+        self.end_text_duration = 1.6           # Dauer des End-Textes (Sek.)
+        self._boss_attack_duration = 0.9       # wie lange die Attack-Animation laufen soll
+
+        # --- Gameplay Werte/Upgrades ---
+        self.gameplay_cfg = gameplay_cfg or {}
         self.mods = mods if isinstance(mods, dict) else {}
 
-        self.firepower = int(gameplay_cfg.get("base_firepower",1))
-        self.upgrade_threshold = int(gameplay_cfg.get("upgrade_threshold",50))
-        self.upgrade_amount = int(gameplay_cfg.get("upgrade_amount",1))
-        self.max_firepower = int(gameplay_cfg.get("max_firepower",10))
+        self.firepower = int(self.gameplay_cfg.get("base_firepower", 1))
+        self.upgrade_threshold = int(self.gameplay_cfg.get("upgrade_threshold", 50))
+        self.upgrade_amount = int(self.gameplay_cfg.get("upgrade_amount", 1))
+        self.max_firepower = int(self.gameplay_cfg.get("max_firepower", 10))
         self.score = 0
         self.next_upgrade_at = self.upgrade_threshold
         self.kills = 0
 
+        # --- Leben/Entkommen ---
         self.escapes = 0
         self.max_escapes = 3
         self.game_over = False
 
-        # Fonts
+        # --- Fonts/HUD ---
         self.font_hud     = pygame.font.SysFont(None, 30, bold=False)
         self.font_floater = pygame.font.SysFont(None, 48, bold=True)
         self.font_debug   = pygame.font.SysFont(None, 24, bold=False)
         self.font_big     = pygame.font.SysFont(None, 56, bold=True)
         self.font_end     = pygame.font.SysFont(None, 72, bold=True)
 
+        # Debug/UX
         self.last_click = None
+
+    # ===================== Boss / Intro ===================================
+
+    def attach_boss_from_level_cfg(self):
+        cfg = self.mods.get("__boss_cfg__") or {}
+        if not isinstance(cfg, dict) or not cfg:
+            return
+
+        enemy = str(cfg.get("enemy") or "TheSmith")
+        pos = cfg.get("pos") or cfg.get("feet") or [760, 620]
+        scale = float(cfg.get("scale", 1.0))
+        text = cfg.get("text") or cfg.get("shout") or "Angriff!!!"
+
+        # Text-Dauer (Sekunden) – auch "1500ms" möglich
+        tdur = cfg.get("text_duration", 1.2)
+        try:
+            self._attack_text_duration = (
+                float(tdur) if isinstance(tdur, (int, float))
+                else (float(str(tdur).replace("ms", "")) / 1000.0 if "ms" in str(tdur) else float(tdur))
+            )
+        except Exception:
+            self._attack_text_duration = 1.2
+
+        # End-Spruch (+ Dauer) optional
+        end_text = str(cfg.get("end_text", "") or "").strip()
+        if end_text:
+            self._end_msg = self.font_end.render(end_text, True, (255, 255, 255))
+            self._end_msg_shadow = self.font_end.render(end_text, True, (0, 0, 0))
+        else:
+            self._end_msg = self._end_msg_shadow = None
+        try:
+            self._end_text_duration = float(cfg.get("end_text_duration", getattr(self, "_end_text_duration", 1.2)))
+        except Exception:
+            self._end_text_duration = 1.2
+
+        # Attack-Süd-Atlas laden
+        folder = os.path.join(ASSET_ROOT, "pics/TowerDefence", "Enemies", enemy)
+        jj = os.path.join(folder, f"{enemy.lower()}_attack.json")
+        if not os.path.isfile(jj):
+            jj = os.path.join(folder, "thesmith_attack.json")
+        atlas = load_grid_atlas(jj, folder, fallbacks=("attack.png",))
+        frames_s = atlas["frames"].get("S") or atlas["frames"].get("s")
+        anchor_s = atlas["anchors"].get("S") or atlas["anchors"].get("s")
+        if not frames_s:
+            print("[BOSS] Kein S-Angriff in", enemy);
+            return
+
+        # BossProp erzeugen und JSON-Pos/Scale anwenden
+        self.boss = BossProp(frames_s, anchor_s, (int(pos[0]), int(pos[1])), fps=10, scale=scale)
+        self._attack_msg = self.font_end.render(str(text), True, (255, 255, 255))
+        self._attack_msg_shadow = self.font_end.render(str(text), True, (0, 0, 0))
+
+    def prepare_boss_intro_from_level(self):
+        if self.boss:
+            self.boss_intro_active = True
+            self.waiting_start = True
+            intro = (self.mods.get("boss_intro") or {}) if isinstance(self.mods.get("boss_intro"), dict) else {}
+            self.boss_intro_text = intro.get("text", "")
+            self.boss_intro_alpha = int(intro.get("bg_alpha", 200))
+            # Bild optional selbst setzen (z.B. erstes Attack-Frame):
+            self.boss_intro_img = self.boss.frames[0]
+
+    def trigger_attack_shout(self):
+        if self.boss:
+            self.boss.play_for(max(0.7, len(self.boss.frames) / max(1.0, self.boss.fps)))
+        self.attack_msg_t = max(self.attack_msg_t, float(getattr(self, "_attack_text_duration", 1.2)))
+
+    def trigger_end_shout(self):
+        """Am Ende eines Levels (oder wenn du es explizit willst)."""
+        self.end_shout_t = float(self.end_text_duration)
+
+    # ===================== UI/HUD/Utils ====================================
 
     def _maybe_upgrade(self):
         changed = False
@@ -744,125 +1208,17 @@ class LevelState:
         self.floaters.append(FloatingText(text, x, y, self.font_floater))
 
     def overlay_blocks_at(self, x, y):
+        """True, wenn aktives Overlay an (x,y) opak ist."""
         xi, yi = int(x), int(y)
         if not (0 <= xi < WIDTH and 0 <= yi < HEIGHT):
             return False
         for ov in self.overlays:
-            if not ov["active"] or not ov.get("blocks", True): continue
+            if not ov["active"] or not ov.get("blocks", True):
+                continue
             a = ov["surf"].get_at((xi, yi)).a
             if a > OVERLAY_BLOCK_ALPHA:
                 return True
         return False
-
-    def apply_hit(self, mx, my):
-        if self.game_over or self.waiting_start:
-            return False
-        if self.overlay_blocks_at(mx, my):
-            return False
-        for e in reversed(self.enemies):
-            if e.dead: continue
-            kind = e.hit_kind(mx,my)
-            if kind == "none": continue
-            damage = max(1, self.firepower)
-            if kind == "head":
-                if e.headshot_instant_kill:
-                    e.hp = 0
-                else:
-                    damage = max(1, int(round(damage * e.headshot_mul)))
-            if e.hp > 0: e.hp -= damage
-            if e.hp <= 0:
-                frm = e.frames[e.dir][e.findex]
-                self.spawn_floater(f"+{e.score}", e.fx, e.fy, frm, e.walk_anchor[e.dir])
-                self.effects.append(ExplosionEffect(
-                    e.death[e.dir], (int(e.fx),int(e.fy)),
-                    frm, e.death_anchor[e.dir],
-                    death_fps=e.etype.death_fps))
-                e.dead=True
-                self.kills += 1
-                self.score += e.score
-                self._maybe_upgrade()
-            else:
-                if e.hit_frames:
-                    e.hit_active = True; e.hit_index = 0; e.hit_anim_accum = 0.0
-            return True
-        return False
-
-    def update_spawning(self, dt):
-        if self.game_over or self.waiting_start:
-            return
-        self.time += dt
-
-        while self.spawn_queue and self.spawn_queue[0]["t"] <= self.time:
-            s = self.spawn_queue.pop(0)
-
-            typ = s.get("type", "Zombie")
-            path_key = str(s.get("path", "0")).lower()
-            path_pts = self.paths.get(path_key) or next(iter(self.paths.values()))
-
-            # --- Level-/Typ-Modifikatoren aus waves.json
-            lvl_all = self.mods.get(typ="all") if False else self.mods.get("all", {})
-            lvl_typ = self.mods.get(typ, {})
-
-            def pget(field, default=None):
-                v = s.get(field, None)
-                if v is None: v = lvl_typ.get(field, None)
-                if v is None: v = lvl_all.get(field, None)
-                return default if v is None else v
-
-            # ---- HP (Basis + *alle* Multiplikatoren)
-            hp_base = int(pget("hp", self.gameplay_cfg.get("default_hp", 3)))
-            hp_mul_total = 1.0
-            for v in (lvl_all.get("hp_mul"), lvl_typ.get("hp_mul"), s.get("hp_mul")):
-                if v is not None:
-                    try:
-                        hp_mul_total *= float(v)
-                    except:
-                        pass
-            hp = int(max(0, round(hp_base * hp_mul_total)))
-
-            # ---- Score (Basis + *alle* Multiplikatoren)
-            score_base = int(pget("score", self.gameplay_cfg.get("default_score", 10)))
-            score_mul_total = 1.0
-            for v in (lvl_all.get("score_mul"), lvl_typ.get("score_mul"), s.get("score_mul")):
-                if v is not None:
-                    try:
-                        score_mul_total *= float(v)
-                    except:
-                        pass
-            score = int(max(0, round(score_base * score_mul_total)))
-
-            # ---- Scale/Speed aus Level (mit Gameplay-Fallback)
-            scale = float(pget("scale", self.gameplay_cfg.get("default_scale", 1.0)))
-            speed = float(pget("move_speed", self.gameplay_cfg.get("default_speed", 95.0)))
-
-            # ---- Headshot-Logik pro Level (inkl. mods)
-            hmul = float(pget("headshot_mul", self.gameplay_cfg.get("default_headshot_mul", 2.0)))
-            hkill = bool(pget("headshot_instant_kill", False))
-
-            enemy = Enemy(self.enemy_types[typ], path_pts,
-                          hp=hp, score=score,
-                          headshot_mul=hmul, headshot_instant_kill=hkill,
-                          speed=speed, scale=scale)
-            enemy.spawn_id = s.get("id")
-            self.enemies.append(enemy)
-
-    def update_overlay_triggers(self):
-        for ov in self.overlays:
-            tr = ov.get("trigger")
-            if not tr or ov["active"]:
-                continue
-            tx, ty, r = tr["x"], tr["y"], tr["r"]
-            r2 = r*r
-            for e in self.enemies:
-                if e.dead: continue
-                if ov.get("only_type") and e.etype.name != ov["only_type"]:
-                    continue
-                if ov.get("only_spawn_id") and e.spawn_id != ov["only_spawn_id"]:
-                    continue
-                dx = e.fx - tx; dy = e.fy - ty
-                if dx*dx + dy*dy <= r2:
-                    ov["active"] = True
-                    break
 
     def draw_hud(self, screen):
         blit_text_outline(screen, self.font_hud, f"Firepower: {self.firepower}",
@@ -883,19 +1239,210 @@ class LevelState:
                               (WIDTH-10, 8 + 34 + 32 + lifes.get_height() + 8),
                               color=(255,255,255), outline=(0,0,0), w=2, align_right=True)
 
-# ===== Main ===================================================================
-def discover_sublevels(level_folder):
-    p = os.path.join(ASSET_ROOT, "pics/TowerDefence", level_folder)
-    if not os.path.isdir(p): return []
-    imgs = []
-    for f in os.listdir(p):
-        lf = f.lower()
-        if not lf.endswith(".png"): continue
-        if lf.startswith("overlay") or ".overlay" in lf: continue
-        imgs.append(f)
-    imgs.sort(key=natural_key)
-    return [(os.path.splitext(f)[0], os.path.join(p, f)) for f in imgs]
+    # ===================== Treffer / Schuss ================================
 
+    def apply_hit(self, mx, my):
+        if self.game_over or self.waiting_start or self.boss_intro_active:
+            return False
+        if self.overlay_blocks_at(mx, my):
+            return False
+
+        # von oben nach unten → zuletzt gezeichneter Gegner zuerst
+        for e in reversed(self.enemies):
+            if e.dead:
+                continue
+            kind = e.hit_kind(mx,my)
+            if kind == "none":
+                continue
+
+            damage = max(1, self.firepower)
+            if kind == "head":
+                if e.headshot_instant_kill:
+                    e.hp = 0
+                else:
+                    damage = max(1, int(round(damage * e.headshot_mul)))
+
+            if not (kind == "head" and e.headshot_instant_kill):
+                e.hp -= damage
+
+            if e.hp <= 0:
+                frm = e.frames[e.dir][e.findex]
+                self.spawn_floater(f"+{e.score}", e.fx, e.fy, frm, e.walk_anchor[e.dir])
+                self.effects.append(ExplosionEffect(
+                    e.death[e.dir], (int(e.fx),int(e.fy)),
+                    frm, e.death_anchor[e.dir],
+                    death_fps=e.etype.death_fps))
+                e.dead = True
+                self.kills += 1
+                self.score += e.score
+                self._maybe_upgrade()
+            else:
+                if e.hit_frames:
+                    e.hit_active = True
+                    e.hit_index = 0
+                    e.hit_anim_accum = 0.0
+                self.effects.append(HitPopEffect((e.fx, e.fy)))
+            return True
+        return False
+
+    # ===================== Waves / Spawning ================================
+
+    def _start_wave(self, ix):
+        """interner Start einer Welle ix"""
+        if ix >= len(self.waves):
+            return False
+        wv = self.waves[ix]
+        self.spawn_queue = list(wv.get("spawns", []))
+        self.spawn_queue.sort(key=lambda s: s.get("t", 0.0))
+        self.current_wave_mods = wv.get("mods", {}) or {}
+        self.wave_time = 0.0
+        return True
+
+    def on_press_enter(self):
+        """Von außen aufgerufen, wenn Enter gedrückt wurde (Start/weiter)."""
+        if self.boss_intro_active:
+            # Intro schließen → direkt starten
+            self.boss_intro_active = False
+            self.waiting_start = False
+            # sofortige Attack-Animation + Text
+            self.trigger_attack_shout()
+            self._start_wave(self.wave_index)
+            return
+
+        if self.waiting_start:
+            self.waiting_start = False
+            # Falls noch keine Welle läuft → starten
+            if not self.spawn_queue and self.wave_index < len(self.waves):
+                self.trigger_attack_shout()
+                self._start_wave(self.wave_index)
+
+    def update_spawning(self, dt):
+        if self.game_over:
+            return
+
+        # Welche Gegner „leben“ (nicht tot/entkommen)?
+        def alive_enemies():
+            alive = []
+            for e in self.enemies:
+                if e.dead:
+                    continue
+                at_end = (e.seg >= len(e.path) - 1)
+                if at_end and (e.is_offscreen(margin=12) or e.feet_offscreen(margin=2)):
+                    continue
+                alive.append(e)
+            return alive
+
+        # Neue Welle starten?
+        if self.wave_index < len(self.waves):
+            # Welle noch nicht geladen?
+            if not self.spawn_queue and self.wave_time == 0.0:
+                if self.wave_index == 0:
+                    # Erste Welle: warten, bis waiting_start False ist
+                    if not self.waiting_start and not self.boss_intro_active:
+                        self.trigger_attack_shout()
+                        self._start_wave(self.wave_index)
+                else:
+                    if not alive_enemies():
+                        # Folge-Wellen: abhängig von require_enter
+                        nxt = self.waves[self.wave_index]
+                        if bool(nxt.get("require_enter", False)):
+                            if not self.waiting_start and not self.boss_intro_active:
+                                self.trigger_attack_shout()
+                                self._start_wave(self.wave_index)
+                        else:
+                            self.trigger_attack_shout()
+                            self._start_wave(self.wave_index)
+
+        # Wenn wir noch am Start-Overlay/Intro stehen → keine Zeit zählen
+        if self.waiting_start or self.boss_intro_active:
+            return
+
+        # Laufende Welle: spawnen, sobald Zeit erreicht
+        if self.spawn_queue:
+            self.wave_time += dt
+            while self.spawn_queue and self.spawn_queue[0].get("t", 0.0) <= self.wave_time:
+                s = self.spawn_queue.pop(0)
+                typ = s.get("type", "Zombie")
+                path_key = str(s.get("path", "0")).lower()
+                path_pts = self.paths.get(path_key) or next(iter(self.paths.values()))
+
+                # Mods-Vererbung (Level/Wave/Spawn)
+                lvl_all = self.mods.get("all", {});      lvl_typ = self.mods.get(typ, {})
+                wav_all = self.current_wave_mods.get("all", {}); wav_typ = self.current_wave_mods.get(typ, {})
+
+                def pget(field, default=None):
+                    v = s.get(field, None)
+                    if v is None: v = wav_typ.get(field, None)
+                    if v is None: v = wav_all.get(field, None)
+                    if v is None: v = lvl_typ.get(field, None)
+                    if v is None: v = lvl_all.get(field, None)
+                    return default if v is None else v
+
+                hp_base = int(pget("hp", self.gameplay_cfg.get("default_hp", 3)))
+                hp_mul_total = 1.0
+                for v in (lvl_all.get("hp_mul"), lvl_typ.get("hp_mul"), wav_all.get("hp_mul"),
+                          wav_typ.get("hp_mul"), s.get("hp_mul")):
+                    if v is not None:
+                        try: hp_mul_total *= float(v)
+                        except: pass
+                hp = int(max(0, round(hp_base * hp_mul_total)))
+
+                score_base = int(pget("score", self.gameplay_cfg.get("default_score", 10)))
+                score_mul_total = 1.0
+                for v in (lvl_all.get("score_mul"), lvl_typ.get("score_mul"), wav_all.get("score_mul"),
+                          wav_typ.get("score_mul"), s.get("score_mul")):
+                    if v is not None:
+                        try: score_mul_total *= float(v)
+                        except: pass
+                score = int(max(0, round(score_base * score_mul_total)))
+
+                scale = float(pget("scale", self.gameplay_cfg.get("default_scale", 1.0)))
+                speed = float(pget("move_speed", self.gameplay_cfg.get("default_speed", 95.0)))
+                hmul  = float(pget("headshot_mul", self.gameplay_cfg.get("default_headshot_mul", 2.0)))
+                hkill = bool(pget("headshot_instant_kill", False))
+                aura_cfg = s.get("aura") if isinstance(s.get("aura"), dict) else None
+
+                enemy = Enemy(self.enemy_types[typ], path_pts,
+                              hp=hp, score=score,
+                              headshot_mul=hmul, headshot_instant_kill=hkill,
+                              speed=speed, scale=scale, aura=aura_cfg)
+                enemy.spawn_id = s.get("id")
+                self.enemies.append(enemy)
+
+        # Welle abgeschlossen? → nächste vorbereiten/ENTER ggf. nötig
+        if not self.spawn_queue and not alive_enemies() and self.wave_index < len(self.waves):
+            self.wave_index += 1
+            self.wave_time = 0.0
+            if self.wave_index < len(self.waves) and bool(self.waves[self.wave_index].get("require_enter", False)):
+                self.waiting_start = True
+            else:
+                # Auto-Start der nächsten Welle
+                self.trigger_attack_shout()
+                self._start_wave(self.wave_index)
+
+    # ===================== Overlays / Trigger ==============================
+
+    def update_overlay_triggers(self):
+        """Aktiviere Overlays, deren Trigger erreicht wurde (mit Filtern)."""
+        for ov in self.overlays:
+            tr = ov.get("trigger")
+            if not tr or ov["active"]:
+                continue
+            tx, ty, r = tr["x"], tr["y"], tr["r"]
+            r2 = r*r
+            for e in self.enemies:
+                if e.dead:
+                    continue
+                if ov.get("only_type") and e.etype.name != ov["only_type"]:
+                    continue
+                if ov.get("only_spawn_id") and e.spawn_id != ov["only_spawn_id"]:
+                    continue
+                dx = e.fx - tx; dy = e.fy - ty
+                if dx*dx + dy*dy <= r2:
+                    ov["active"] = True
+                    break
+
+# ===== MAIN ===================================================================
 def main():
     pygame.init()
     flags = pygame.HWSURFACE | pygame.DOUBLEBUF
@@ -903,11 +1450,11 @@ def main():
         screen = pygame.display.set_mode((WIDTH, HEIGHT), flags, vsync=1)
     except TypeError:
         screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
-    pygame.display.set_caption("TowerDefence — Minimal")
+    pygame.display.set_caption("TowerDefence — Worlds")
     clock = pygame.time.Clock()
     pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN])
 
-    # Load enemies
+    # Gegner laden
     ENEMY_TYPES = {}
     enemies_root = os.path.join(ASSET_ROOT, "pics/TowerDefence/Enemies")
     global_cfg = read_global_enemy_cfg()
@@ -921,179 +1468,425 @@ def main():
                     print(f"[WARN] Gegner {name} konnte nicht geladen werden:", e)
     if not ENEMY_TYPES:
         raise SystemExit("Keine Gegner in pics/TowerDefence/Enemies/ gefunden.")
+
     gameplay_cfg = read_gameplay_cfg()
 
-    # Level structure
-    levels = [f"Level{i}" for i in range(1,51) if discover_sublevels(f"Level{i}")]
-    if not levels: raise SystemExit("Keine Levelordner mit PNGs gefunden.")
+    # ---- WORLDS
+    worlds = discover_worlds()
+    if not worlds:
+        raise SystemExit("Keine Welten in pics/TowerDefence/Worlds/ gefunden.")
+    world_idx = 0
+    world_mode = "select"  # "select" -> "intro" -> "game"
+
+    # Platzhalter für laufendes Level
+    world_name = worlds[world_idx]
+    levels = discover_levels(world_name)
+    if not levels:
+        raise SystemExit(f"Keine Level in World '{world_name}' gefunden.")
     level_index = 0
-    sublevels = discover_sublevels(levels[level_index])
+    sublevels = discover_sublevels(world_name, levels[level_index])
     sub_index = 0
 
-    def build_state(level_folder, subname, img_path):
+    def build_state(world, level_folder, subname, img_path):
         bg = try_load(img_path)
         if bg is None:
-            bg = pygame.Surface((WIDTH, HEIGHT)); bg.fill((40, 60, 40))
+            bg = pygame.Surface((WIDTH, HEIGHT))
+            bg.fill((40, 60, 40))
         else:
-            bg = pygame.transform.smoothscale(bg,(WIDTH,HEIGHT))
-        paths_dict, spawn_q, overlay_rules, mods = load_level_spec(level_folder, subname, ENEMY_TYPES)
-        overlays = load_overlays(level_folder, subname, overlay_rules)
-        return LevelState(bg, paths_dict, ENEMY_TYPES, gameplay_cfg, spawn_q, overlays, mods)
+            bg = pygame.transform.smoothscale(bg, (WIDTH, HEIGHT))
+        paths_dict, waves, overlay_rules, mods = load_level_spec(world, level_folder, subname, ENEMY_TYPES)
+        overlays = load_overlays(world, level_folder, subname, overlay_rules)
+        return LevelState(bg, paths_dict, ENEMY_TYPES, gameplay_cfg, waves, overlays, mods)
 
-    def label_for(level_i, subs, sub_i):
-        lvl = levels[level_i]; name = subs[sub_i][0]
-        return f"{lvl} — {name}"
+    # Intro-Setup (Welt-Intro, nicht Boss-Intro)
+    intro_img = None
+    intro_cfg = {}
 
-    def find_next_tuple(level_i, subs, sub_i):
-        nxt_li = level_i
-        nxt_subs = subs
-        nxt_si = sub_i + 1
-        if nxt_si >= len(subs):
-            nxt_li = level_i + 1
-            if nxt_li >= len(levels):
-                return None
-            nxt_subs = discover_sublevels(levels[nxt_li])
-            nxt_si = 0
-        label = label_for(nxt_li, nxt_subs, nxt_si)
-        return (nxt_li, nxt_subs, nxt_si, label)
+    # Fadenkreuz (klein)
+    cross = pygame.Surface((22, 22), pygame.SRCALPHA)
+    pygame.draw.circle(cross, (255, 255, 255), (11, 11), 10, 1)
+    pygame.draw.line(cross, (255, 255, 255), (0, 11), (22, 11), 1)
+    pygame.draw.line(cross, (255, 255, 255), (11, 0), (11, 22), 1)
+    cross_pos = None
+    cross_until = 0
 
-    subname, img_path = sublevels[sub_index]
-    state = build_state(levels[level_index], subname, img_path)
+    # Fonts für World-UI
+    font_title = pygame.font.SysFont(None, 64, bold=True)
+    font_item  = pygame.font.SysFont(None, 36, bold=False)
 
+    # Game-State placeholder
+    state = None
     level_overlay = None
-    pending_next = None
+    pending_next = None  # (world_name, levels, level_index, sublevels, sub_index, next_label)
 
-    # Crosshair
-    cross = pygame.Surface((22,22), pygame.SRCALPHA)
-    pygame.draw.circle(cross,(255,255,255),(11,11),10,1)
-    pygame.draw.line(cross,(255,255,255),(0,11),(22,11),1)
-    pygame.draw.line(cross,(255,255,255),(11,0),(11,22),1)
-    cross_pos=None; cross_until=0
+    t_intro = 0.0
 
-    def draw_start_overlay(label):
-        overlay = pygame.Surface((WIDTH,HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0,0,0,160)); screen.blit(overlay,(0,0))
-        title = state.font_big.render(label, True, (220,255,220))
-        screen.blit(title, (WIDTH//2 - title.get_width()//2, HEIGHT//2 - 60))
-        hint  = state.font_hud.render("Drücke ENTER, um zu starten", True, (255,255,255))
-        sh    = state.font_hud.render("Drücke ENTER, um zu starten", True, (0,0,0))
-        screen.blit(sh,   (WIDTH//2 - sh.get_width()//2 + 2, HEIGHT//2 + 10 + 2))
-        screen.blit(hint, (WIDTH//2 - hint.get_width()//2,    HEIGHT//2 + 10))
-
-    running=True
+    running = True
     while running and hm_game_active():
-        dt = clock.tick(FPS)/1000.0
+        dt = clock.tick(FPS) / 1000.0
 
-        if not state.game_over and level_overlay is None:
-            state.update_spawning(dt)
-            for e in state.enemies: e.update(dt)
-            state.update_overlay_triggers()
-
-        # Cull enemies (escaped offscreen)
-        if level_overlay is None and not state.waiting_start:
-            pruned = []
-            for e in state.enemies:
-                if e.dead: continue
-                at_end = (e.seg >= len(e.path) - 1)
-                if at_end and (e.is_offscreen(margin=12) or e.feet_offscreen(margin=2)):
-                    state.escapes += 1
-                    continue
-                pruned.append(e)
-            state.enemies = pruned
-
-        if not state.game_over and state.escapes > state.max_escapes:
-            state.game_over = True
-
-        # Effects/Floater/PowerFx
-        for eff in list(state.effects):
-            eff.update(dt)
-            if eff.finished(): state.effects.remove(eff)
-        for ft in list(state.floaters):
-            ft.update(dt)
-            if ft.finished(): state.floaters.remove(ft)
-        for pfx in list(state.power_fx):
-            pfx.update(dt)
-            if pfx.finished(): state.power_fx.remove(pfx)
-
-        # Input
+        # ---------------------- Events ----------------------
         for ev in pygame.event.get():
-            if ev.type==pygame.QUIT: running=False
-            elif ev.type==pygame.KEYDOWN:
-                if ev.key==pygame.K_ESCAPE: running=False
-                elif ev.key==pygame.K_RETURN:
-                    if state.waiting_start:
-                        state.waiting_start = False
-                    elif level_overlay is not None:
-                        if pending_next:
-                            level_index, sublevels, sub_index, _ = pending_next
-                            subname, img_path = sublevels[sub_index]
-                            state = build_state(levels[level_index], subname, img_path)
-                        level_overlay = None; pending_next = None
-                elif ev.key == pygame.K_n:  # Debug next level/sublevel
-                    nxt = find_next_tuple(level_index, sublevels, sub_index)
-                    if nxt is None:
-                        level_index = 0; sublevels = discover_sublevels(levels[level_index]); sub_index = 0
-                    else:
-                        level_index, sublevels, sub_index, _ = nxt
-                    subname, img_path = sublevels[sub_index]
-                    state = build_state(levels[level_index], subname, img_path)
-                elif state.game_over and ev.key == pygame.K_r:
-                    state = build_state(levels[level_index], subname, img_path)
-                    level_overlay = None; pending_next = None
-            elif ev.type==pygame.MOUSEBUTTONDOWN and ev.button==1 and not state.game_over and level_overlay is None:
-                mx,my = ev.pos
-                state.last_click = (mx,my)
-                cross_pos = (mx - cross.get_width()//2, my - cross.get_height()//2)
-                cross_until = pygame.time.get_ticks() + 120
-                state.apply_hit(mx,my)
+            if ev.type == pygame.QUIT:
+                running = False
 
-        if not state.game_over and level_overlay is None and not state.waiting_start and hm_hit_detected():
+            elif ev.type == pygame.KEYDOWN:
+                # Global
+                if ev.key == pygame.K_ESCAPE:
+                    running = False
+
+                # ---------------- Welt-Auswahl ----------------
+                if world_mode == "select":
+                    if ev.key == pygame.K_UP:
+                        world_idx = (world_idx - 1) % len(worlds)
+                    elif ev.key == pygame.K_DOWN:
+                        world_idx = (world_idx + 1) % len(worlds)
+                    elif ev.key == pygame.K_RETURN:
+                        # Auswahl -> Intro vorbereiten
+                        world_name = worlds[world_idx]
+                        levels = discover_levels(world_name)
+                        if not levels:
+                            continue
+                        level_index = 0
+                        sublevels = discover_sublevels(world_name, levels[level_index])
+                        sub_index = 0
+                        intro_img = world_full_image(world_name)
+                        intro_cfg = load_world_intro(world_name)
+                        world_mode = "intro"
+                        t_intro = 0.0
+
+                # ---------------- Welt-Intro ------------------
+                elif world_mode == "intro":
+                    if ev.key == pygame.K_RETURN:
+                        # Level-State anlegen
+                        subname, img_path = sublevels[sub_index]
+                        state = build_state(world_name, levels[level_index], subname, img_path)
+                        # Boss & Intro (aus Level-JSON)
+                        state.attach_boss_from_level_cfg()
+                        state.prepare_boss_intro_from_level()
+                        # In den Spielmodus wechseln; wir warten zunächst auf Start (Intro offen)
+                        world_mode = "game"
+                        level_overlay = None
+                        pending_next = None
+                        state.waiting_start = True
+                        continue
+
+                # ---------------- Game ------------------------
+                elif world_mode == "game":
+                    # ENTER: Start/Welle/Levelende weiter
+                    if ev.key == pygame.K_RETURN:
+                        if state is None:
+                            # Safety
+                            subname, img_path = sublevels[sub_index]
+                            state = build_state(world_name, levels[level_index], subname, img_path)
+                            state.attach_boss_from_level_cfg()
+                            state.prepare_boss_intro_from_level()
+                            state.waiting_start = True
+                            continue
+
+                        # Boss-Intro schließen -> sofort Welle starten
+                        if getattr(state, "boss_intro_active", False):
+                            state.boss_intro_active = False
+                            # Falls wir noch im Start-Warten sind, sofort starten:
+                            if getattr(state, "waiting_start", False):
+                                state.on_press_enter()
+                            continue
+
+                        # Start der ersten/nächsten Welle (falls noch Start-Overlay)
+                        if getattr(state, "waiting_start", False):
+                            state.on_press_enter()
+                            continue
+
+                        # Level-Ende-Overlay -> weiter
+                        if level_overlay is not None:
+                            if pending_next:
+                                # Kampagnenwerte sichern
+                                prev_fire = getattr(state, 'firepower', 1)
+                                prev_score = getattr(state, 'score', 0)
+                                prev_next = getattr(state, 'next_upgrade_at', 50)
+                                # nächstes Level/Sublevel laden
+                                world_name, levels, level_index, sublevels, sub_index, _ = pending_next
+                                subname, img_path = sublevels[sub_index]
+                                state = build_state(world_name, levels[level_index], subname, img_path)
+                                state.attach_boss_from_level_cfg()
+                                state.prepare_boss_intro_from_level()
+                                # Werte wiederherstellen
+                                state.firepower = prev_fire
+                                state.score = prev_score
+                                state.next_upgrade_at = prev_next
+                                level_overlay = None
+                                pending_next = None
+                            continue
+
+                    # SPACE: Pause
+                    elif ev.key == pygame.K_SPACE and state and not state.game_over:
+                        state.paused = not state.paused
+
+                    # Debug: N = nächster Sublevel/Level
+                    elif ev.key == pygame.K_n and state:
+                        prev_fire = getattr(state, 'firepower', 1)
+                        prev_score = getattr(state, 'score', 0)
+                        prev_next = getattr(state, 'next_upgrade_at', 50)
+
+                        nxt = None
+                        nxt_si = sub_index + 1
+                        if nxt_si >= len(sublevels):
+                            nxt_li = level_index + 1
+                            if nxt_li < len(levels):
+                                nsubs = discover_sublevels(world_name, levels[nxt_li])
+                                if nsubs:
+                                    nxt = (world_name, levels, nxt_li, nsubs, 0,
+                                           get_level_title(world_name, levels[nxt_li], nsubs[0][0]))
+                        else:
+                            nxt = (world_name, levels, level_index, sublevels, nxt_si,
+                                   get_level_title(world_name, levels[level_index], sublevels[nxt_si][0]))
+
+                        if nxt:
+                            world_name, levels, level_index, sublevels, sub_index, _ = nxt
+                            subname, img_path = sublevels[sub_index]
+                            state = build_state(world_name, levels[level_index], subname, img_path)
+                            state.attach_boss_from_level_cfg()
+                            state.prepare_boss_intro_from_level()
+                            state.firepower = prev_fire
+                            state.score = prev_score
+                            state.next_upgrade_at = prev_next
+                            level_overlay = None
+                            pending_next = None
+                        else:
+                            world_mode = "select"
+                            continue
+
+            elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
+                if world_mode == "game" and state and not state.game_over and level_overlay is None:
+                    mx, my = ev.pos
+                    state.last_click = (mx, my)
+                    cross_pos = (mx - cross.get_width() // 2, my - cross.get_height() // 2)
+                    cross_until = pygame.time.get_ticks() + 120
+                    state.apply_hit(mx, my)
+
+        # HM-Systeme Schuss
+        if world_mode == "game" and state and not state.game_over and level_overlay is None and not getattr(state, "boss_intro_active", False) and not getattr(state, "waiting_start", False) and hm_hit_detected():
             pos = hm_get_pos()
             if pos:
-                mx,my = pos
-                state.last_click = (mx,my)
-                cross_pos = (mx - cross.get_width()//2, my - cross.get_height()//2)
+                mx, my = pos
+                state.last_click = (mx, my)
+                cross_pos = (mx - cross.get_width() // 2, my - cross.get_height() // 2)
                 cross_until = pygame.time.get_ticks() + 120
-                state.apply_hit(mx,my)
+                state.apply_hit(mx, my)
 
-        # Finish level overlay
-        if not state.game_over and level_overlay is None and not state.waiting_start:
-            alive = [e for e in state.enemies if not e.dead]
-            if not state.spawn_queue and not alive and not state.effects:
-                nxt = find_next_tuple(level_index, sublevels, sub_index)
-                stats = {"firepower": state.firepower, "score": state.score,
-                         "kills": state.kills, "escapes": state.escapes, "max_escapes": state.max_escapes}
-                if nxt is not None:
-                    pending_next = nxt; level_overlay = LevelEndOverlay(stats, nxt[3])
-                else:
-                    pending_next = None; level_overlay = LevelEndOverlay(stats, "Ende")
+        # ---------------------- Updates ---------------------
+        if world_mode == "game" and state:
+            # Auto-Start, falls Intro bereits geschlossen ist, wir aber noch warten
+            if getattr(state, "waiting_start", False) and not getattr(state, "boss_intro_active", False):
+                state.on_press_enter()
 
-        # Render
-        screen.blit(state.bg,(0,0))
-        for e in state.enemies: e.draw(screen)
-        for eff in state.effects: eff.draw(screen)
-        for ov in state.overlays:
-            if ov["active"]:
-                screen.blit(ov["surf"], (0,0))
-        for ft in state.floaters: ft.draw(screen)
-        for pfx in state.power_fx: pfx.draw(screen, state.font_big)
-        state.draw_hud(screen)
+            if state and not state.game_over and level_overlay is None and not getattr(state, "paused", False):
+                state.update_spawning(dt)
+                for e in state.enemies:
+                    e.update(dt)
+                state.update_overlay_triggers()
 
-        if state.waiting_start:
-            draw_start_overlay(label_for(level_index, sublevels, sub_index))
-        if level_overlay is not None and not state.waiting_start:
-            level_overlay.draw(screen, state.font_big, state.font_hud)
+                # Gegnerliste ausdünnen (entkommen/weg)
+                pruned = []
+                for e in state.enemies:
+                    if e.dead:
+                        continue
+                    at_end = (e.seg >= len(e.path) - 1)
+                    if at_end and (e.is_offscreen(margin=12) or e.feet_offscreen(margin=2)):
+                        state.escapes += 1
+                        continue
+                    pruned.append(e)
+                state.enemies = pruned
 
-        if state.game_over:
-            overlay = pygame.Surface((WIDTH,HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0,0,0,160)); screen.blit(overlay,(0,0))
-            t = state.font_end.render("GAME OVER", True, (255,220,220))
-            screen.blit(t, (WIDTH//2 - t.get_width()//2, HEIGHT//2 - t.get_height()//2 - 30))
-            s = state.font_hud.render("ESC = Beenden • R = Neustart Level", True, (230,230,230))
-            screen.blit(s, (WIDTH//2 - s.get_width()//2, HEIGHT//2 + 30))
+                # Effekte / Floater / PowerUps
+                for eff in list(state.effects):
+                    eff.update(dt)
+                    if eff.finished():
+                        state.effects.remove(eff)
+                for ft in list(state.floaters):
+                    ft.update(dt)
+                    if ft.finished():
+                        state.floaters.remove(ft)
+                for pfx in list(state.power_fx):
+                    pfx.update(dt)
+                    if pfx.finished():
+                        state.power_fx.remove(pfx)
 
-        if cross_pos and pygame.time.get_ticks() < cross_until:
-            screen.blit(cross, (int(cross_pos[0]), int(cross_pos[1])))
+            # Game Over?
+            if not state.game_over and state.escapes > state.max_escapes:
+                state.game_over = True
+
+            # Levelende? (keine Spawns, keine Alive-Gegner, keine Effekte, alle Wellen durch)
+            if (not state.game_over
+                    and level_overlay is None
+                    and not state.waiting_start):
+                alive_left = [e for e in state.enemies if not e.dead]
+                all_waves_done = (not hasattr(state, "waves")) or (state.wave_index >= len(state.waves))
+                if not state.spawn_queue and not alive_left and not state.effects and all_waves_done:
+                    # Nächstes Sublevel/Level bestimmen
+                    nxt = None
+                    nxt_si = sub_index + 1
+                    if nxt_si >= len(sublevels):
+                        nxt_li = level_index + 1
+                        if nxt_li < len(levels):
+                            nsubs = discover_sublevels(world_name, levels[nxt_li])
+                            if nsubs:
+                                nxt = (world_name, levels, nxt_li, nsubs, 0,
+                                       get_level_title(world_name, levels[nxt_li], nsubs[0][0]))
+                    else:
+                        nxt = (world_name, levels, level_index, sublevels, nxt_si,
+                               get_level_title(world_name, levels[level_index], sublevels[nxt_si][0]))
+
+                    stats = {"firepower": state.firepower, "score": state.score,
+                             "kills": state.kills, "escapes": state.escapes, "max_escapes": state.max_escapes}
+                    if nxt is not None:
+                        pending_next = nxt
+                        level_overlay = LevelEndOverlay(stats, nxt[5])
+                    else:
+                        # Welt abgeschlossen -> zurück zur Weltwahl
+                        world_mode = "select"
+                        continue
+
+        # ---------------------- Render ----------------------
+        if world_mode == "select":
+            draw_world_select(screen, worlds, world_idx, font_title, font_item)
+
+        elif world_mode == "intro":
+            t_intro += dt
+            draw_world_intro(screen, world_name, intro_img, intro_cfg, t_intro)
+
+        elif world_mode == "game":
+            if state:
+                # Hintergrund
+                screen.blit(state.bg, (0, 0))
+
+                # Gegner/Effekte
+                for e in state.enemies:
+                    e.draw(screen)
+                for eff in state.effects:
+                    eff.draw(screen)
+
+                # Overlays
+                for ov in state.overlays:
+                    if ov["active"]:
+                        screen.blit(ov["surf"], (0, 0))
+
+                # Boss ÜBER den Overlays
+                if getattr(state, "boss", None):
+                    state.boss.draw(screen)
+
+                # Floater/PowerFX/HUD
+                for ft in state.floaters:
+                    ft.draw(screen)
+                for pfx in state.power_fx:
+                    pfx.draw(screen, state.font_big)
+                state.draw_hud(screen)
+
+                # ---- Boss-Intro-Overlay (Bild links, Text rechts) ----
+                if getattr(state, "boss_intro_active", False):
+                    # Abdunkeln
+                    alpha = int(getattr(state, "boss_intro_alpha", 200))
+                    ov = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                    ov.fill((0, 0, 0, max(0, min(255, alpha))))
+                    screen.blit(ov, (0, 0))
+                    # Bild links
+                    if getattr(state, "boss_intro_img", None):
+                        img = state.boss_intro_img
+                        x = int(WIDTH * 0.08)
+                        y = HEIGHT // 2 - img.get_height() // 2
+                        screen.blit(img, (x, y))
+                    # Text rechts (Wrap)
+                    tx = int(WIDTH * 0.55)
+                    maxw = WIDTH - tx - 40
+                    lines = wrap_lines(state.font_big, getattr(state, "boss_intro_text", "") or "", maxw)
+                    ty = int(HEIGHT * 0.28)
+                    for line in lines:
+                        txt = state.font_big.render(line, True, (255, 255, 255))
+                        sh  = state.font_big.render(line, True, (0, 0, 0))
+                        screen.blit(sh,  (tx + 2, ty + 2))
+                        screen.blit(txt, (tx, ty))
+                        ty += txt.get_height() + 6
+                    # Hinweis
+                    hint = state.font_hud.render("ENTER = Start", True, (255, 255, 255))
+                    sh   = state.font_hud.render("ENTER = Start", True, (0, 0, 0))
+                    screen.blit(sh,   (WIDTH // 2 - hint.get_width() // 2 + 2, HEIGHT - 70 + 2))
+                    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2,     HEIGHT - 70))
+
+                # ---- Angriff!!! direkt über dem Boss ----
+                if getattr(state, "end_shout_t", 0.0) <= 0.0 and getattr(state, "attack_msg_t", 0.0) > 0.0 and getattr(state, "_attack_msg", None) and getattr(state, "boss", None):
+                    img = state.boss.frames[state.boss.idx] if state.boss.playing else state.boss.frames[0]
+                    ax, ay = state.boss.anchor
+                    tlx = int(state.boss.fx - ax)
+                    tly = int(state.boss.fy - ay)
+                    x = tlx + img.get_width() // 2 - state._attack_msg.get_width() // 2
+                    y = max(6, tly - state._attack_msg.get_height() - 8)
+                    screen.blit(state._attack_msg_shadow, (x + 2, y + 2))
+                    screen.blit(state._attack_msg,        (x, y))
+
+                # ---- End-Text zentriert ----
+                if getattr(state, "end_shout_t", 0.0) > 0.0 and getattr(state, "_end_msg", None):
+                    cx = WIDTH // 2
+                    cy = HEIGHT // 2
+                    screen.blit(state._end_msg_shadow, (cx - state._end_msg_shadow.get_width() // 2 + 2, cy - 160 + 2))
+                    screen.blit(state._end_msg,        (cx - state._end_msg.get_width() // 2,        cy - 160))
+
+                # Start-Overlay (Titel + Welleninfo), nur wenn KEIN Boss-Intro gerade läuft
+                if state.waiting_start and not getattr(state, "boss_intro_active", False):
+                    lbl = get_level_title(world_name, levels[level_index], sublevels[sub_index][0])
+                    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                    overlay.fill((0, 0, 0, 160))
+                    screen.blit(overlay, (0, 0))
+                    title = state.font_big.render(lbl, True, (220, 255, 220))
+                    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, HEIGHT // 2 - 60))
+                    # Welleninfo
+                    if hasattr(state, "waves") and state.waves:
+                        current = min(state.wave_index + 1, len(state.waves))
+                        total = len(state.waves)
+                        label = ""
+                        try:
+                            label = state.waves[state.wave_index].get("label", "") or ""
+                        except Exception:
+                            pass
+                        wave_text = f"Welle {current}/{total}" + (f" – {label}" if label else "")
+                        wave_surf = state.font_hud.render(wave_text, True, (220, 255, 220))
+                        wave_sh   = state.font_hud.render(wave_text, True, (0, 0, 0))
+                        y = HEIGHT // 2 - 60 + title.get_height() + 6
+                        screen.blit(wave_sh, (WIDTH // 2 - wave_sh.get_width() // 2 + 2, y + 2))
+                        screen.blit(wave_surf, (WIDTH // 2 - wave_surf.get_width() // 2, y))
+                    hint = state.font_hud.render("Drücke ENTER, um zu starten", True, (255, 255, 255))
+                    sh   = state.font_hud.render("Drücke ENTER, um zu starten", True, (0, 0, 0))
+                    screen.blit(sh,   (WIDTH // 2 - sh.get_width() // 2 + 2, HEIGHT // 2 + 10 + 2))
+                    screen.blit(hint, (WIDTH // 2 - hint.get_width() // 2, HEIGHT // 2 + 10))
+
+                # Level-Ende Overlay?
+                if level_overlay is not None and not state.waiting_start:
+                    level_overlay.draw(screen, state.font_big, state.font_hud)
+
+                # Game Over?
+                if state.game_over:
+                    ov = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                    ov.fill((0, 0, 0, 160))
+                    screen.blit(ov, (0, 0))
+                    t = state.font_end.render("GAME OVER", True, (255, 220, 220))
+                    screen.blit(t, (WIDTH // 2 - t.get_width() // 2, HEIGHT // 2 - t.get_height() // 2 - 30))
+                    s = state.font_hud.render("ESC = Beenden • R = Neustart Level", True, (230, 230, 230))
+                    screen.blit(s, (WIDTH // 2 - s.get_width() // 2, HEIGHT // 2 + 30))
+
+                # Fadenkreuz-Klick
+                if cross_pos and pygame.time.get_ticks() < cross_until:
+                    screen.blit(cross, (int(cross_pos[0]), int(cross_pos[1])))
+
+        # --- Pause-Overlay ---
+        if world_mode == "game" and state and getattr(state, "paused", False):
+            ov = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            ov.fill((0, 0, 0, 120))
+            screen.blit(ov, (0, 0))
+            txt = state.font_end.render("PAUSE", True, (255, 255, 255))
+            sh = state.font_end.render("PAUSE", True, (0, 0, 0))
+            x = WIDTH // 2 - txt.get_width() // 2
+            y = HEIGHT // 2 - txt.get_height() // 2
+            screen.blit(sh, (x + 2, y + 2))
+            screen.blit(txt, (x, y))
 
         pygame.display.flip()
 
