@@ -49,7 +49,7 @@ CROSS_FLASH_MS = 120
 RIGHT_INSET = 90
 ASSET_ROOT = os.path.dirname(os.path.realpath(__file__))
 
-# Explosion
+# Explosion / Effekte
 EXP_DURATION = 0.9
 GRAVITY = 1300.0
 MAX_SHARDS = 32
@@ -59,18 +59,12 @@ SHAKE_MS = 220
 SHAKE_AMPL = 12
 SHOCK_MS = 280
 
-# ---- Death-Animation-Geschwindigkeit (Frames pro Sekunde) je Figur-Klasse ----
-# Kleiner = langsamer. Alles hier zentral einstellbar.
-DEATH_FPS_BY_CLASS = {
-    "gangsta":      3,   # Wilder Westen
-    "zombie":       9,   # Ship-Zombie (Atlas)
-    "ballrog":      9,   # Ship-Bosse (Einzel-PNG-Sequenzen)
-    "earthelement": 9,
-    "icemonster":   9,
-    "mauler":       9,
-    "default":      9,   # Fallback
+# Globale Death-Geschwindigkeit (FPS) je Figurtyp
+DEATH_FPS = {
+    "Gangsta": 7,
+    "Zombie":  12,
+    "default": 9,
 }
-
 
 # ---------- Helfer ----------
 def try_load_img(path):
@@ -111,37 +105,16 @@ def shake_offset(ms_since_start: int) -> tuple[int,int]:
     amp = max(0, int(SHAKE_AMPL * k))
     return (random.randint(-amp, amp), random.randint(-amp, amp))
 
-def get_death_fps_for(level_name: str, target) -> int:
-    """Liest (1) per-Target-Override, sonst (2) Klassen-Standard aus DEATH_FPS_BY_CLASS."""
-    # 1) Per-Target-Override erlaubt (falls gesetzt)
-    fps = getattr(target, "death_fps", None)
-    if isinstance(fps, (int, float)) and fps > 0:
-        return int(fps)
-
-    # 2) Klassen-Standard
-    if target.__class__.__name__ == "Zombie":
-        return DEATH_FPS_BY_CLASS.get("zombie", DEATH_FPS_BY_CLASS["default"])
-
-    if level_name == "Wilder Westen":
-        return DEATH_FPS_BY_CLASS.get("gangsta", DEATH_FPS_BY_CLASS["default"])
-
-    if level_name == "DeathShip":
-        key = (getattr(target, "name", "") or "").lower()
-        return DEATH_FPS_BY_CLASS.get(key, DEATH_FPS_BY_CLASS["default"])
-
-    return DEATH_FPS_BY_CLASS["default"]
-
 # ---------- Grid-Atlas Loader (schema: "grid-v1") ----------
 def load_grid_atlas(json_path, image_dir):
     """
     Erwartet:
       {
-        "meta": {"image": "zWalk.png", "schema": "grid-v1"},
+        "meta": {"image": "zWalkx.png", "schema": "grid-v1"},
         "grid": {
           "dirs": ["N","NE","E","SE","S","SW","W","NW"],
           "frames_per_dir": 8,
-          "order": "row-major",
-          "trim": false
+          "order": "row-major"
         }
       }
     """
@@ -165,7 +138,6 @@ def load_grid_atlas(json_path, image_dir):
     fw = sheet.get_width()  // cols
     fh = sheet.get_height() // rows
 
-    # Frames je Richtung
     by_dir = {}
     for r, d in enumerate(dirs):
         seq = []
@@ -446,13 +418,6 @@ def make_explosion_from_surface(surf, world_x, world_y, override_color=None):
 # --- generische Simultan-Animation: Explosion + Death-Frames gleichzeitig ---
 def animate_simul_explosion_death(screen, clock, draw_bg, death_frames, pos, surf_for_explosion,
                                   override_color=(255,40,40), death_fps=9, overlay_top_fn=None):
-    """
-    draw_bg(offset)   -> zeichnet Szene OHNE Standbild des Ziels
-    death_frames      -> Liste mit Frames
-    pos               -> (x,y) der Death-Sequenz
-    surf_for_explosion-> Surface, die für die Explosion zerlegt wird
-    overlay_top_fn    -> optionaler Callback, um Overlays nach oben zu blitten (z.B. Balkon)
-    """
     (cx,cy), color, shards, sparks = make_explosion_from_surface(surf_for_explosion, pos[0], pos[1], override_color)
     start = pygame.time.get_ticks(); last = start
     frame_ms = max(1, int(1000/max(1,death_fps)))
@@ -600,46 +565,33 @@ def main():
         nonlocal level_idx
         level_idx=(level_idx+1)%len(levels)
 
+    # Explosion (Früchte + generisch)
     def animate_explosion(screen, clock, draw_scene_wo, target, override_color=None):
-        """Explosion + (bei Früchten zusätzlich Fall) – draw_scene_wo zeichnet Szene OHNE das getroffene Target."""
         (cx, cy), color, shards, sparks = make_explosion_from_surface(target.surf, target.x, target.y, override_color)
-        start = pygame.time.get_ticks();
-        last = start
+        start = pygame.time.get_ticks(); last = start
         duration_ms = int(EXP_DURATION * 1000)
         flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         shock = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
 
-        # Standbild sofort ausblenden (kein Doppelbild)
+        # Standbild sofort ausblenden
         target.done = True
 
-        # „Frucht“-Heuristik: hat keine death_frames → fällt zusätzlich runter
-        is_fruit = not getattr(target, "death_frames",
-                               []) and "Gangsta" not in target.name and "Ship" not in target.name
-        fall_y = float(target.y);
-        fall_v = 0.0
+        # „Frucht“-Heuristik
+        is_fruit = not getattr(target, "death_frames", []) and "Gangsta" not in target.name and "Ship" not in target.name
+        fall_y = float(target.y); fall_v = 0.0
 
         while True:
-            now = pygame.time.get_ticks();
-            dt = (now - last) / 1000.0;
-            last = now;
-            t = now - start
+            now = pygame.time.get_ticks(); dt = (now - last) / 1000.0; last = now; t = now - start
             for ev in pygame.event.get():
                 if ev.type == pygame.QUIT: return False
                 if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE: return False
 
             # Physik
             for s in shards:
-                s.vy += GRAVITY * dt;
-                s.x += s.vx * dt;
-                s.y += s.vy * dt;
-                s.angle += s.omega * dt
+                s.vy += GRAVITY * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.angle += s.omega * dt
                 s.alpha = max(0, s.alpha - int(255 * dt / EXP_DURATION))
             for sp in list(sparks):
-                sp.life -= dt;
-                sp.x += sp.vx * dt;
-                sp.y += sp.vy * dt;
-                sp.vx *= 0.985;
-                sp.vy += GRAVITY * 0.65 * dt
+                sp.life -= dt; sp.x += sp.vx * dt; sp.y += sp.vy * dt; sp.vx *= 0.985; sp.vy += GRAVITY * 0.65 * dt
                 if sp.life <= 0: sparks.remove(sp)
 
             if is_fruit:
@@ -651,30 +603,26 @@ def main():
 
             if t < SHOCK_MS:
                 shock.fill((0, 0, 0, 0))
-                prog = t / SHOCK_MS
-                r = int(20 + prog * 140);
-                a = max(0, int(180 * (1.0 - prog)))
+                prog = t / SHOCK_MS; r = int(20 + prog * 140); a = max(0, int(180 * (1.0 - prog)))
                 pygame.draw.circle(shock, (255, 255, 255, a), (int(cx + offset[0]), int(cy + offset[1])), r, 4)
                 screen.blit(shock, (0, 0))
 
             for s in shards:
                 if s.alpha <= 0: continue
-                img = pygame.transform.rotozoom(s.surf, -s.angle, 1.0);
-                img.set_alpha(s.alpha)
+                img = pygame.transform.rotozoom(s.surf, -s.angle, 1.0); img.set_alpha(s.alpha)
                 screen.blit(img, (int(s.x + offset[0]), int(s.y + offset[1])))
 
             for sp in sparks:
-                pygame.draw.circle(screen, sp.color, (int(sp.x + offset[0]), int(sp.y + offset[1])), sp.r)
+                pygame.draw.circle(screen, (255,60,60) if override_color else (200,200,200),
+                                   (int(sp.x + offset[0]), int(sp.y + offset[1])), sp.r)
 
             if t < FLASH_MS:
-                flash.fill((255, 255, 255, int(220 * (1.0 - t / FLASH_MS))));
-                screen.blit(flash, (0, 0))
+                flash.fill((255, 255, 255, int(220 * (1.0 - t / FLASH_MS)))); screen.blit(flash, (0, 0))
 
             if is_fruit:
                 screen.blit(target.surf, (int(target.x + offset[0]), int(fall_y + offset[1])))
 
-            pygame.display.flip();
-            clock.tick(FPS_LIMIT)
+            pygame.display.flip(); clock.tick(FPS_LIMIT)
             if t > duration_ms: break
         return True
 
@@ -683,21 +631,14 @@ def main():
         # --- Zombie (Ship, Atlas) ---
         if isinstance(target, Zombie):
             ship = levels[level_idx]
-            # im Draw verstecken
             ship.hide_zombie = True
-            # Explosion auf aktuellem Walk-Frame
             surf = ship.zombie.walk["frames"][target.dir][target.frame]
             death_frames = ship.zombie.death["frames"][target.dir]
-            def draw_wo(offset):  # ohne Zombie rendern
-                draw_base(offset)
-
+            def draw_wo(offset): draw_base(offset)
             ok = animate_simul_explosion_death(
                 screen, clock, draw_wo, death_frames, (int(target.x), int(target.y)), surf,
-                override_color=(255, 40, 40),
-                death_fps=get_death_fps_for(levels[level_idx].name, target)
+                override_color=(255,40,40), death_fps=DEATH_FPS.get("Zombie", DEATH_FPS["default"])
             )
-
-            # als erledigt markieren
             target.kill()
             target.dead_frame = len(death_frames)-1
             return ok
@@ -706,27 +647,21 @@ def main():
         is_west = levels[level_idx].name == "Wilder Westen"
         is_ship = levels[level_idx].name == "DeathShip"
         if (is_west or is_ship) and target.death_frames:
-            # Standbild sofort ausblenden
             target.done = True
-            def draw_wo(offset):
-                draw_base(offset)
-            # ggf. Balkon-Overlay nochmal OBEN drauf
+            def draw_wo(offset): draw_base(offset)
             def overlay_top(offset):
                 if is_west and hasattr(levels[level_idx], "draw_overlays"):
                     levels[level_idx].draw_overlays(screen, offset)
-
             ok = animate_simul_explosion_death(
                 screen, clock, draw_wo, target.death_frames, (int(target.x), int(target.y)), target.surf,
-                override_color=(255, 40, 40),
-                death_fps=get_death_fps_for(levels[level_idx].name, target),
+                override_color=(255,40,40),
+                death_fps=DEATH_FPS.get("Gangsta", DEATH_FPS["default"]) if is_west else DEATH_FPS["default"],
                 overlay_top_fn=overlay_top
             )
-
             return ok
 
-        # --- Baum (Frucht: Explosion+Fall) oder Targets ohne Deathframes ---
+        # --- Baum / sonstige ---
         def draw_wo(offset): draw_base(offset)
-        # markiert intern target.done = True (kein Doppelbild)
         return animate_explosion(screen, clock, draw_wo, target, override_color=None)
 
     def advance_turn(hit, target_hit):
