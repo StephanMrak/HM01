@@ -1,18 +1,19 @@
+import math
+import random
+from collections import defaultdict, namedtuple
+from enum import IntEnum
+
+import hmsysteme
 import pygame
 from pygame.constants import (
+    K_ESCAPE,
+    K_RETURN,
+    KEYDOWN,
+    KEYUP,
     MOUSEBUTTONDOWN,
     MOUSEBUTTONUP,
     QUIT,
-    KEYDOWN,
-    KEYUP,
-    K_ESCAPE,
-    K_RETURN
 )
-import random
-import math
-from enum import IntEnum
-from collections import namedtuple, defaultdict
-import hmsysteme
 
 BLACK = (0, 0, 0)
 GRAY = (100, 100, 100)
@@ -48,10 +49,17 @@ class AppState(IntEnum):
     EXIT = 6
 
 
-class GameInfo():
-    def __init__(self, screen_size: list, number_of_rounds: int, number_of_targets: int, playernames: list, wait_enter=True):
+class GameInfo:
+    def __init__(
+        self,
+        screen_size: tuple,
+        number_of_rounds: int,
+        number_of_targets: int,
+        playernames: list,
+        wait_enter=True,
+    ):
         self.screen_size = screen_size
-        #self.screen = pygame.display.set_mode(self.screen_size)
+        # self.screen = pygame.display.set_mode(self.screen_size)
         self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 
         self.number_of_rounds = number_of_rounds
@@ -69,8 +77,7 @@ class GameInfo():
         self.font_big = pygame.font.Font(None, 100)
 
 
-class App():
-
+class App:
     def __init__(self, gameinfo, debug: bool = False):
         self.debug = debug
         self.gameinfo = gameinfo
@@ -109,45 +116,57 @@ class App():
 
     def get_all_scores(self):  # ToDo
         print("\nResults")
-        print("Player\t", end='')
+        print("Player\t", end="")
         for player in self.players:
-            print(player.name, end='\t')
+            print(player.name, end="\t")
         print("")
 
         for round_no in range(self.gameinfo.number_of_rounds):
             for target_no in range(self.gameinfo.number_of_targets):
-                print("R{} T{}\t".format(round_no, target_no), end='')
-                for number, player in enumerate(self.players):
+                print("R{} T{}\t".format(round_no, target_no), end="")
+                for player in self.players:
                     score = str(player.targets[round_no][target_no].score)
-                    print(score + "\t", end='')
+                    print(score + "\t", end="")
                 print("")
 
-            print("Subtot\t", end='')
+            print("Subtot\t", end="")
             for player in self.players:
-                summe = str([sum([y.score for y in x.values()]) for x in player.targets.values()][round_no])
-                print(summe + "\t", end='')
+                summe = str(
+                    [
+                        sum([y.score for y in x.values()])
+                        for x in player.targets.values()
+                    ][round_no]
+                )
+                print(summe + "\t", end="")
             print("")
-            print("---\t" * (len(self.players)+1))
+            print("---\t" * (len(self.players) + 1))
 
-        print("Final\t", end='')
+        print("Final\t", end="")
         for player in self.players:
-            summe = str(sum([sum([y.score for y in x.values()]) for x in player.targets.values()]))
-            print(summe + "\t", end='')
+            summe = str(
+                sum(
+                    [
+                        sum([y.score for y in x.values()])
+                        for x in player.targets.values()
+                    ]
+                )
+            )
+            print(summe + "\t", end="")
 
             # for (no_round, no_target), target in player.targets.items():
-                # print("R{}T{}: {}".format(no_round + 1, no_target + 1, target.score))
-                # self.all_scores.append([player.name, no_round, no_target, target.score])
+            # print("R{}T{}: {}".format(no_round + 1, no_target + 1, target.score))
+            # self.all_scores.append([player.name, no_round, no_target, target.score])
 
         # print(tabulate(self.all_scores))
         # print("Summe: {}".format(sum([target.score for a, target in player.targets.items()])))
-        
+
     def escape_action(self):
-        if self.state != AppState.QUIT_GAME:
+        if self.state == AppState.QUIT_GAME:
+            self.state = AppState.EXIT
+        else:
             self.old_state = self.state
             self.state = AppState.QUIT_GAME
-        else:
-            self.state = AppState.EXIT
-    
+
     def return_action(self):
         if self.state == AppState.INSTRUCTIONS:
             self.next_state()
@@ -163,7 +182,7 @@ class App():
     def event_loop(self):
         for event in pygame.event.get():
             if event.type == QUIT:
-                self.escape_action()
+                self.state = AppState.QUIT_GAME
             elif event.type == KEYUP:
                 if event.key == K_ESCAPE:
                     self.escape_action()
@@ -182,29 +201,29 @@ class App():
 
         iGetAction = hmsysteme.get_action()
         if iGetAction > 0:
-            #Button 10m Pistole
+            # Button 10m Pistole
             if iGetAction == 1:
-                self.escape_action()
+                self.state = AppState.QUIT_GAME
             elif iGetAction == 3:
                 self.return_action()
 
     def update(self, dt):
-
         if self.state == AppState.INSTRUCTIONS:
             pass
 
         elif self.state == AppState.GAME:
-
             self.player.update(dt)
             player_state = self.player.state
 
-            if player_state == PlayerState.RUNNING:  # Player playing :)
+            if player_state == PlayerState.RUNNING:
                 pass
 
-            elif player_state == PlayerState.NEXT_TARGET:  # one Targets gone
+            # one Target is gone
+            elif player_state == PlayerState.NEXT_TARGET:
                 pass
 
-            elif player_state == PlayerState.NEXT_ROUND:  # Round over / next Player
+            # Round over / next Player
+            elif player_state == PlayerState.NEXT_ROUND:
                 self.player_index += 1
 
                 if self.player_index < len(self.players):
@@ -214,10 +233,12 @@ class App():
                     self.player_index = 0
                     self.player = self.players[self.player_index]
 
-            elif player_state == PlayerState.WAIT_NEXT_ROUND:  # All Players have played, new Round, activate Player
+            # All Players have played, new Round, activate Player
+            elif player_state == PlayerState.WAIT_NEXT_ROUND:
                 self.player.state = PlayerState.RUNNING
-
-            elif player_state == PlayerState.GAME_OVER:  # Player done, next player or Quit()
+                #
+            # Player done, next player or Quit()
+            elif player_state == PlayerState.GAME_OVER:
                 self.player_index += 1
 
                 if self.player_index < len(self.players):
@@ -230,14 +251,15 @@ class App():
             pass
 
     def draw(self):
-
         if self.state == AppState.INSTRUCTIONS:
             self.fps = 20
             self.screen_color = GRAY
             self.gameinfo.screen.fill(self.screen_color)
             self.caption = "Instructions"
 
-            instruction_text = self.gameinfo.font.render("Instruction Text", True, WHITE)
+            instruction_text = self.gameinfo.font.render(
+                "Instruction Text", True, WHITE
+            )
             self.gameinfo.screen.blit(instruction_text, [200, 200])
 
         elif self.state == AppState.GAME:
@@ -253,8 +275,12 @@ class App():
             self.gameinfo.screen.blit(name_text, [40, 100])
 
             score = self.player.score
-            score_text = self.gameinfo.font.render("Punkte: {}".format(score), True, BLACK, WHITE)
-            self.gameinfo.screen.blit(score_text, [40, self.gameinfo.screen_size[1] - 100])
+            score_text = self.gameinfo.font.render(
+                "Punkte: {}".format(score), True, BLACK, WHITE
+            )
+            self.gameinfo.screen.blit(
+                score_text, [40, self.gameinfo.screen_size[1] - 100]
+            )
 
         elif self.state == AppState.HIGHSCORE:
             pass
@@ -262,9 +288,8 @@ class App():
             self.screen_color = GRAY
             self.gameinfo.screen.fill(self.screen_color)
             self.caption = "Highscore"
-
-            x = self.gameinfo.screen_size[0] / 2
             """
+            x = self.gameinfo.screen_size[0] / 2
             offset = 0
             for player in self.players:
                 name = self.gameinfo.font.render("Player: {}".format(player.name), True, BLACK)
@@ -275,6 +300,7 @@ class App():
                 for (no_round, no_target), target in player.targets.items():
 
                     score = self.gameinfo.font.render("Runde {} Scheibe {}, Punkte: {}".format(no_round + 1 , no_target + 1, target.score), True, BLACK)
+
                     self.gameinfo.screen.blit(score, (int(x - score.get_width() / 2), int((score.get_height()) + offset)))
 
                     offset += 50
@@ -286,6 +312,7 @@ class App():
             """
 
         elif self.state == AppState.QUIT_GAME:
+            #
             self.fps = 5
             self.screen_color = BLACK
             self.gameinfo.screen.fill(self.screen_color)
@@ -295,8 +322,12 @@ class App():
             text_quit_3 = self.gameinfo.font.render("Zurück mit Enter", True, WHITE)
 
             self.gameinfo.screen.blit(text_quit_1, [200, 200])
-            self.gameinfo.screen.blit(text_quit_2, [200, 200 + self.gameinfo.font.get_height() * 1.5])
-            self.gameinfo.screen.blit(text_quit_3, [200, 200 + 2 * self.gameinfo.font.get_height() * 1.5])
+            self.gameinfo.screen.blit(
+                text_quit_2, [200, 200 + self.gameinfo.font.get_height() * 1.5]
+            )
+            self.gameinfo.screen.blit(
+                text_quit_3, [200, 200 + 2 * self.gameinfo.font.get_height() * 1.5]
+            )
 
         if self.caption != self.old_caption:
             self.old_caption = self.caption
@@ -311,7 +342,7 @@ class App():
             pygame.display.update()
 
 
-class Player():
+class Player:
     def __init__(self, name, gameinfo):
         self.gameinfo = gameinfo
         self.name = name
@@ -340,7 +371,9 @@ class Player():
             self.target.update(dt)
 
             # self.score = sum([x.score for x in self.targets.values()])
-            sum_per_round = [sum([y.score for y in x.values()]) for x in self.targets.values()]
+            sum_per_round = [
+                sum([y.score for y in x.values()]) for x in self.targets.values()
+            ]
             self.score = sum(sum_per_round)
 
             if self.target.properties().state == TargetState.EXIT:
@@ -377,21 +410,30 @@ class Player():
         self.target.draw()
 
         if self.target.state == TargetState.NEW:
-            player_1 = self.gameinfo.font_big.render("Player: {}".format(self.name), True, BLACK)
+            player_1 = self.gameinfo.font_big.render(
+                "Player: {}".format(self.name), True, BLACK
+            )
             player_2 = self.gameinfo.font.render("Press Enter", True, BLACK)
             x = self.gameinfo.screen_size[0] / 2
             y = self.gameinfo.screen_size[1] / 2
-            self.gameinfo.screen.blit(player_1, (int(x - player_1.get_width() / 2), int(y - player_1.get_height() / 2)))
-            self.gameinfo.screen.blit(player_2, (int(x - player_2.get_width() / 2), int((y - player_2.get_height() / 2) + 75)))
+            self.gameinfo.screen.blit(
+                player_1,
+                (int(x - player_1.get_width() / 2), int(y - player_1.get_height() / 2)),
+            )
+            self.gameinfo.screen.blit(
+                player_2,
+                (
+                    int(x - player_2.get_width() / 2),
+                    int((y - player_2.get_height() / 2) + 75),
+                ),
+            )
 
     def create_bullet_hole(self, xy):
         self.target.new_hole(xy)
 
 
-class Target():
-
+class Target:
     def __init__(self, gameinfo):
-
         self.gameinfo = gameinfo
 
         self.radius_original = 400
@@ -411,8 +453,12 @@ class Target():
         self.color = RED
         self.make_screenshot = False  # timer starts, gets updated in update()
 
-        self.x = random.randint(int(gameinfo.screen_size[0] * 0.4), int(gameinfo.screen_size[0] * 0.6))
-        self.y = random.randint(int(gameinfo.screen_size[1] * 0.4), int(gameinfo.screen_size[1] * 0.6))
+        self.x = random.randint(
+            int(gameinfo.screen_size[0] * 0.4), int(gameinfo.screen_size[0] * 0.6)
+        )
+        self.y = random.randint(
+            int(gameinfo.screen_size[1] * 0.4), int(gameinfo.screen_size[1] * 0.6)
+        )
         self.score = 0
 
         self.holes = []
@@ -421,7 +467,9 @@ class Target():
         self.wait_enter = False
 
     def draw(self):
-        pygame.draw.circle(self.gameinfo.screen, self.color, (self.x, self.y), int(self.radius), 0)
+        pygame.draw.circle(
+            self.gameinfo.screen, self.color, (self.x, self.y), int(self.radius), 0
+        )
 
         # current_radius = self.gameinfo.font.render("Radius: {:.0f}".format(self.radius), True, BLACK, WHITE)
         # self.gameinfo.screen.blit(current_radius, [10, self.gameinfo.screen_size[1] - 45])
@@ -433,13 +481,14 @@ class Target():
         self.score = sum([x.score for x in self.holes])
 
     def new_hole(self, xy):
-
         if self.state == TargetState.NEW:  # Hit while waiting for Enter (Return) Button
             self.state = TargetState.BEFORE_SHRINK
             self.timer = self.TIME_BEFORE_SHRINK
 
         elif self.state == TargetState.BEFORE_SHRINK:  # Hit before Target is black
-            self.holes.append(Bullet_Hole(self.gameinfo, xy, RED, self.gameinfo.hard_punish))
+            self.holes.append(
+                Bullet_Hole(self.gameinfo, xy, RED, self.gameinfo.hard_punish)
+            )
             self.state = TargetState.AFTER
             self.timer = self.TIME_AFTER
 
@@ -447,22 +496,32 @@ class Target():
             # calculate if hit or miss
             x, y = xy
             if self.gameinfo.delay > 0:
-                additional = int((self.gameinfo.delay / self.TIME_SHRINKING) * self.radius_original)
+                additional = int(
+                    (self.gameinfo.delay / self.TIME_SHRINKING) * self.radius_original
+                )
             else:
                 additional = 0
 
-            if math.sqrt((self.x - x)**2 + (self.y - y)**2) <= (self.radius + additional):  # Hit
-                self.holes.append(Bullet_Hole(self.gameinfo, xy, GREEN, int(self.radius) + additional))
+            if math.sqrt((self.x - x) ** 2 + (self.y - y) ** 2) <= (
+                self.radius + additional
+            ):  # Hit
+                self.holes.append(
+                    Bullet_Hole(self.gameinfo, xy, GREEN, int(self.radius) + additional)
+                )
                 self.radius += additional
                 print("Radius {:0.2f} - Hit".format(self.radius))
             else:  # Miss
-                self.holes.append(Bullet_Hole(self.gameinfo, xy, RED, self.gameinfo.soft_punish))
+                self.holes.append(
+                    Bullet_Hole(self.gameinfo, xy, RED, self.gameinfo.soft_punish)
+                )
                 print("Radius {:0.2f} - Miss".format(self.radius))
             self.state = TargetState.AFTER
             self.timer = self.TIME_AFTER
 
         elif self.state == TargetState.AFTER:
-            self.holes.append(Bullet_Hole(self.gameinfo, xy, RED, self.gameinfo.hard_punish))
+            self.holes.append(
+                Bullet_Hole(self.gameinfo, xy, RED, self.gameinfo.hard_punish)
+            )
 
         else:
             print("create bullet hole - else?")
@@ -497,13 +556,18 @@ class Target():
             if self.timer > -(self.gameinfo.delay) - dt:
                 self.radius = (self.timer / self.TIME_SHRINKING) * self.radius_original
                 self.radius = 0 if self.radius <= 0 else self.radius
-                #print("dt: {}, timer: {:1.2f}, radius: {:1.2f}, andere: {:1.4f}".format(dt,self.timer, self.radius, 1-(TARGET_SHRINKING_TIME - self.timer)/TARGET_SHRINKING_TIME))
+                # print("dt: {}, timer: {:1.2f}, radius: {:1.2f}, andere: {:1.4f}".format(dt,self.timer, self.radius, 1-(TARGET_SHRINKING_TIME - self.timer)/TARGET_SHRINKING_TIME))
             else:
                 self.state = TargetState.AFTER
                 self.timer = self.TIME_AFTER
-                bullet_hole = Bullet_Hole(self.gameinfo, xy=(self.x, self.y), color=RED, score=self.gameinfo.hard_punish)
+                bullet_hole = Bullet_Hole(
+                    self.gameinfo,
+                    xy=(self.x, self.y),
+                    color=RED,
+                    score=self.gameinfo.hard_punish,
+                )
                 self.holes.append(bullet_hole)
-                #self.holes.append(Bullet_Hole(self.x, self.y, RED, self.gameinfo.hard_punish))
+                # self.holes.append(Bullet_Hole(self.x, self.y, RED, self.gameinfo.hard_punish))
 
         elif self.state == TargetState.AFTER:
             self.timer -= dt
@@ -535,8 +599,7 @@ class Target():
                 hmsysteme.take_screenshot(self.gameinfo.screen)
 
 
-class Bullet_Hole():
-
+class Bullet_Hole:
     def __init__(self, gameinfo, xy=(0, 0), color=RED, score=0):
         self.gameinfo = gameinfo
         self.original_radius = 25
@@ -551,23 +614,29 @@ class Bullet_Hole():
         self.score = score
         self.score_position = 0
         self.display = True
-        #print(self.__dict__)
+        # print(self.__dict__)
 
     def update(self, dt):
         if self.display:
             if self.timer > 0:
                 self.timer -= dt
                 self.timer = 0 if self.timer < 0 else self.timer
-                self.radius = ((self.timer / self.shrinking_time)) * self.original_radius
+                self.radius = (self.timer / self.shrinking_time) * self.original_radius
                 self.score_position -= 0.5
             else:
                 self.display = False
 
     def draw(self):
         if self.display:
-            pygame.draw.circle(self.gameinfo.screen, self.color, (self.x, self.y), int(self.radius), 0)
-            score_text = self.gameinfo.font.render("{}".format(self.score), True, self.color)
-            self.gameinfo.screen.blit(score_text, [self.x + 25, self.y + int(self.score_position)])
+            pygame.draw.circle(
+                self.gameinfo.screen, self.color, (self.x, self.y), int(self.radius), 0
+            )
+            score_text = self.gameinfo.font.render(
+                "{}".format(self.score), True, self.color
+            )
+            self.gameinfo.screen.blit(
+                score_text, [self.x + 25, self.y + int(self.score_position)]
+            )
 
 
 def main(debug: bool = False):
@@ -579,15 +648,21 @@ def main(debug: bool = False):
 
     screen_size = hmsysteme.get_size()
     if not screen_size:
-        screen_size = [300, 300]
+        screen_size = (300, 300)
 
     hmsysteme.put_button_names(["Escape", "no function", "Enter"])
 
     number_of_targets = 2  # Targets per player
     number_of_rounds = 2  # Number of Rounds
-    wait_enter = True     # Wait for enter button to be pushed
+    wait_enter = True  # Wait for enter button to be pushed
 
-    gameinfo = GameInfo(screen_size, number_of_rounds, number_of_targets, playernames, wait_enter)
+    gameinfo = GameInfo(
+        screen_size=screen_size,
+        number_of_rounds=number_of_rounds,
+        number_of_targets=number_of_targets,
+        playernames=playernames,
+        wait_enter=wait_enter,
+    )
 
     app = App(gameinfo, debug=debug)
     app.run()
