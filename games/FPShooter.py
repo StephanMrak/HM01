@@ -23,6 +23,41 @@ BLUE = (0, 191, 255)
 RED = (255, 0, 0)
 
 
+# Font sizes
+FONT_SIZE_NORMAL = 60
+FONT_SIZE_BIG = 100
+
+# FPS
+FPS_INSTRUCTIONS = 20
+FPS_GAME = 80
+FPS_QUIT = 5
+
+# Score punishments (defaults, can be overridden per GameInfo)
+PUNISH_HARD = 500
+PUNISH_SOFT = 100
+
+# Target sizing and placement
+TARGET_RADIUS_FACTOR = 0.4  # fraction of min(screen_w, screen_h)
+TARGET_POS_X_MIN_FACTOR = 0.2
+TARGET_POS_X_MAX_FACTOR = 0.8
+TARGET_POS_Y_MIN_FACTOR = 0.35
+TARGET_POS_Y_MAX_FACTOR = 0.65
+
+# Target timing (milliseconds)
+TARGET_TIME_BEFORE_SHRINK = 2000
+TARGET_TIME_SHRINKING = 7000
+TARGET_TIME_AFTER = 2000
+TARGET_TIME_SCREENSHOT = 500
+
+# Bullet hole visuals / timing (milliseconds)
+BULLETHOLE_RADIUS = 25
+BULLETHOLE_SHRINKING_TIME = 3000
+
+# Default game parameters (used in main as fallback)
+DEFAULT_NUMBER_OF_TARGETS = 2
+DEFAULT_NUMBER_OF_ROUNDS = 2
+
+
 class TargetState(IntEnum):  # State for Target
     NEW = 1
     BEFORE_SHRINK = 2
@@ -56,7 +91,7 @@ class GameInfo:
         number_of_rounds: int,
         number_of_targets: int,
         playernames: list,
-        wait_enter=True,
+        wait_enter: bool = True,
     ):
         self.screen_size = screen_size
         # self.screen = pygame.display.set_mode(self.screen_size)
@@ -67,21 +102,23 @@ class GameInfo:
 
         self.playernames = playernames
         self.wait_enter = wait_enter
-        self.hard_punish = 500
-        self.soft_punish = 100
+        self.hard_punish = PUNISH_HARD
+        self.soft_punish = PUNISH_SOFT
+
+        self.current_player = None
 
         self.delay = 0
 
         pygame.font.init()
-        self.font = pygame.font.Font(None, 60)
-        self.font_big = pygame.font.Font(None, 100)
+        self.font = pygame.font.Font(None, FONT_SIZE_NORMAL)
+        self.font_big = pygame.font.Font(None, FONT_SIZE_BIG)
 
 
 class App:
     def __init__(self, gameinfo, debug: bool = False):
         self.debug = debug
         self.gameinfo = gameinfo
-        self.fps = 20
+        self.fps = FPS_INSTRUCTIONS
 
         self.state = AppState.STARTUP
         self.old_state = AppState.STARTUP
@@ -252,18 +289,30 @@ class App:
 
     def draw(self):
         if self.state == AppState.INSTRUCTIONS:
-            self.fps = 20
+            self.fps = FPS_INSTRUCTIONS
             self.screen_color = GRAY
             self.gameinfo.screen.fill(self.screen_color)
             self.caption = "Instructions"
 
-            instruction_text = self.gameinfo.font.render(
-                "Instruction Text", True, WHITE
-            )
-            self.gameinfo.screen.blit(instruction_text, [200, 200])
+            lines = [
+                "Willkommen zu FPShooter.",
+                "",
+                f"Das schwarze Ziel wird mit der Zeit ({TARGET_TIME_SHRINKING / 1000}s) immer kleiner.",
+                "Je später du das Ziel triffst, desto WENIGER Punkte bekommst du.",
+                f"Warte aber nicht zu lange, sonst ist es weg und du bekommst {PUNISH_HARD} Strafpunkte.",
+                f"Wenn du daneben schießt, bekommst du {PUNISH_SOFT} Punkte dazu.",
+                "",
+                f"Es werden {DEFAULT_NUMBER_OF_ROUNDS} Runden mit jeweils {DEFAULT_NUMBER_OF_TARGETS} Zielen gespielt.",
+                "Alle Mitspieler schießen nacheinander.",
+                "Wer zum Schluss die WENIGSTEN Punkte hat gewinnt!",
+            ]
+            for number, line in enumerate(lines):
+                font_surf = self.gameinfo.font.render(line, True, WHITE)
+                font_rect = font_surf.get_rect(topleft=(25, number * 60 + 200))
+                self.gameinfo.screen.blit(font_surf, font_rect)
 
         elif self.state == AppState.GAME:
-            self.fps = 80
+            self.fps = FPS_GAME
             self.screen_color = WHITE
             self.gameinfo.screen.fill(self.screen_color)
             self.caption = "FPShooter"
@@ -284,7 +333,7 @@ class App:
 
         elif self.state == AppState.HIGHSCORE:
             pass
-            self.fps = 20
+            self.fps = FPS_INSTRUCTIONS
             self.screen_color = GRAY
             self.gameinfo.screen.fill(self.screen_color)
             self.caption = "Highscore"
@@ -313,7 +362,7 @@ class App:
 
         elif self.state == AppState.QUIT_GAME:
             #
-            self.fps = 5
+            self.fps = FPS_QUIT
             self.screen_color = BLACK
             self.gameinfo.screen.fill(self.screen_color)
             self.caption = "Spiel beenden"
@@ -436,16 +485,12 @@ class Target:
     def __init__(self, gameinfo):
         self.gameinfo = gameinfo
 
-        self.radius_original = 400
+        min_screen = min(self.gameinfo.screen_size[0], self.gameinfo.screen_size[1])
+        self.radius_original = int(min_screen * TARGET_RADIUS_FACTOR)
         self.radius = self.radius_original
 
-        self.TIME_BEFORE_SHRINK = 2000
-        self.TIME_SHRINKING = 7000
-        self.TIME_AFTER = 2000
-        self.TIME_SCREENSHOT = 500
-
-        self.timer = self.TIME_BEFORE_SHRINK
-        self.timer_screenshot = self.TIME_SCREENSHOT
+        self.timer = TARGET_TIME_BEFORE_SHRINK
+        self.timer_screenshot = TARGET_TIME_SCREENSHOT
 
         self.wait_enter = self.gameinfo.wait_enter
 
@@ -454,11 +499,14 @@ class Target:
         self.make_screenshot = False  # timer starts, gets updated in update()
 
         self.x = random.randint(
-            int(gameinfo.screen_size[0] * 0.4), int(gameinfo.screen_size[0] * 0.6)
+            int(gameinfo.screen_size[0] * TARGET_POS_X_MIN_FACTOR),
+            int(gameinfo.screen_size[0] * TARGET_POS_X_MAX_FACTOR),
         )
         self.y = random.randint(
-            int(gameinfo.screen_size[1] * 0.4), int(gameinfo.screen_size[1] * 0.6)
+            int(gameinfo.screen_size[1] * TARGET_POS_Y_MIN_FACTOR),
+            int(gameinfo.screen_size[1] * TARGET_POS_Y_MAX_FACTOR),
         )
+
         self.score = 0
 
         self.holes = []
@@ -470,7 +518,6 @@ class Target:
         pygame.draw.circle(
             self.gameinfo.screen, self.color, (self.x, self.y), int(self.radius), 0
         )
-
         # current_radius = self.gameinfo.font.render("Radius: {:.0f}".format(self.radius), True, BLACK, WHITE)
         # self.gameinfo.screen.blit(current_radius, [10, self.gameinfo.screen_size[1] - 45])
 
@@ -483,40 +530,50 @@ class Target:
     def new_hole(self, xy):
         if self.state == TargetState.NEW:  # Hit while waiting for Enter (Return) Button
             self.state = TargetState.BEFORE_SHRINK
-            self.timer = self.TIME_BEFORE_SHRINK
+            self.timer = TARGET_TIME_BEFORE_SHRINK
 
         elif self.state == TargetState.BEFORE_SHRINK:  # Hit before Target is black
             self.holes.append(
                 Bullet_Hole(self.gameinfo, xy, RED, self.gameinfo.hard_punish)
             )
             self.state = TargetState.AFTER
-            self.timer = self.TIME_AFTER
+            self.timer = TARGET_TIME_AFTER
 
         elif self.state == TargetState.SHRINK:  # Hit while shrinking
-            # calculate if hit or miss
             x, y = xy
             if self.gameinfo.delay > 0:
                 additional = int(
-                    (self.gameinfo.delay / self.TIME_SHRINKING) * self.radius_original
+                    (self.gameinfo.delay / TARGET_TIME_SHRINKING) * self.radius_original
                 )
             else:
                 additional = 0
 
-            if math.sqrt((self.x - x) ** 2 + (self.y - y) ** 2) <= (
-                self.radius + additional
-            ):  # Hit
+            distance = math.dist((self.x, self.y), (x, y))
+            if distance <= self.radius:  # Hit
                 self.holes.append(
                     Bullet_Hole(self.gameinfo, xy, GREEN, int(self.radius) + additional)
                 )
+                # keep radius consistent (radius was shrinking; restore extra if delay)
                 self.radius += additional
-                print("Radius {:0.2f} - Hit".format(self.radius))
+                print(
+                    f"Spieler: Radius:{self.radius:0.2f}\n",
+                    f"Hit distance from center:{distance:0.2f}\n",
+                    "Hit!\n",
+                    f"{distance - self.radius:0.3f} from corner\n\n",
+                )
+
             else:  # Miss
                 self.holes.append(
                     Bullet_Hole(self.gameinfo, xy, RED, self.gameinfo.soft_punish)
                 )
-                print("Radius {:0.2f} - Miss".format(self.radius))
+                print(
+                    f"Radius:{self.radius:0.2f}\n",
+                    f"Hit distance from center:{distance:0.2f}\n",
+                    "Miss!\n",
+                    f"{distance - self.radius:0.3f} Pixel outside :(\n\n",
+                )
             self.state = TargetState.AFTER
-            self.timer = self.TIME_AFTER
+            self.timer = TARGET_TIME_AFTER
 
         elif self.state == TargetState.AFTER:
             self.holes.append(
@@ -540,26 +597,29 @@ class Target:
             else:
                 self.wait_enter = True if self.gameinfo.wait_enter else False
                 self.state = TargetState.BEFORE_SHRINK
-                self.timer = self.TIME_BEFORE_SHRINK
+                self.timer = TARGET_TIME_BEFORE_SHRINK
 
         elif self.state == TargetState.BEFORE_SHRINK:
             self.timer -= dt
-            if self.timer > 0:
-                self.color = (self.timer / 2000 * 254, 0, 0)
-            else:
+            # color fade to black
+            val = int(max(0, min(254, (self.timer / TARGET_TIME_BEFORE_SHRINK) * 254)))
+            self.color = (val, 0, 0)
+            if self.timer <= 0:
                 self.state = TargetState.SHRINK
                 self.color = BLACK
-                self.timer = self.TIME_SHRINKING
+                self.timer = TARGET_TIME_SHRINKING
 
         elif self.state == TargetState.SHRINK:
             self.timer -= dt
             if self.timer > -(self.gameinfo.delay) - dt:
-                self.radius = (self.timer / self.TIME_SHRINKING) * self.radius_original
+                self.radius = (
+                    self.timer / TARGET_TIME_SHRINKING
+                ) * self.radius_original
                 self.radius = 0 if self.radius <= 0 else self.radius
                 # print("dt: {}, timer: {:1.2f}, radius: {:1.2f}, andere: {:1.4f}".format(dt,self.timer, self.radius, 1-(TARGET_SHRINKING_TIME - self.timer)/TARGET_SHRINKING_TIME))
             else:
                 self.state = TargetState.AFTER
-                self.timer = self.TIME_AFTER
+                self.timer = TARGET_TIME_AFTER
                 bullet_hole = Bullet_Hole(
                     self.gameinfo,
                     xy=(self.x, self.y),
@@ -591,22 +651,18 @@ class Target:
 
         if self.make_screenshot:
             self.timer_screenshot -= dt
-            if self.timer_screenshot > 0:
-                pass
-            else:
+            if self.timer_screenshot <= 0:
                 self.make_screenshot = False
-                self.timer_screenshot = self.timer_screenshot
+                self.timer_screenshot = TARGET_TIME_SCREENSHOT
                 hmsysteme.take_screenshot(self.gameinfo.screen)
 
 
 class Bullet_Hole:
     def __init__(self, gameinfo, xy=(0, 0), color=RED, score=0):
         self.gameinfo = gameinfo
-        self.original_radius = 25
-        self.shrinking_time = 3000
 
-        self.radius = self.original_radius
-        self.timer = self.shrinking_time
+        self.radius = BULLETHOLE_RADIUS
+        self.timer = BULLETHOLE_SHRINKING_TIME
 
         (self.x, self.y) = xy
 
@@ -614,14 +670,20 @@ class Bullet_Hole:
         self.score = score
         self.score_position = 0
         self.display = True
+        self.score_surface = self.gameinfo.font.render(
+            str(self.score), True, self.color
+        )
         # print(self.__dict__)
 
     def update(self, dt):
         if self.display:
             if self.timer > 0:
                 self.timer -= dt
-                self.timer = 0 if self.timer < 0 else self.timer
-                self.radius = (self.timer / self.shrinking_time) * self.original_radius
+                if self.timer < 0:
+                    self.timer = 0
+                self.radius = (
+                    self.timer / BULLETHOLE_SHRINKING_TIME
+                ) * BULLETHOLE_RADIUS
                 self.score_position -= 0.5
             else:
                 self.display = False
@@ -631,11 +693,8 @@ class Bullet_Hole:
             pygame.draw.circle(
                 self.gameinfo.screen, self.color, (self.x, self.y), int(self.radius), 0
             )
-            score_text = self.gameinfo.font.render(
-                "{}".format(self.score), True, self.color
-            )
             self.gameinfo.screen.blit(
-                score_text, [self.x + 25, self.y + int(self.score_position)]
+                self.score_surface, [self.x + 25, self.y + int(self.score_position)]
             )
 
 
@@ -646,22 +705,24 @@ def main(debug: bool = False):
     if not playernames:
         playernames = ["a", "b"]
 
-    screen_size = hmsysteme.get_size()
-    if not screen_size:
-        screen_size = (300, 300)
+    screen_size = (800, 600)
+    if debug:
+        modes = pygame.display.list_modes()
+        if modes:
+            screen_size = modes[0]  # Default to highest resolution
+    else:
+        screen_size = hmsysteme.get_size()
+
+    print(screen_size)
 
     hmsysteme.put_button_names(["Escape", "no function", "Enter"])
 
-    number_of_targets = 2  # Targets per player
-    number_of_rounds = 2  # Number of Rounds
+    number_of_targets = DEFAULT_NUMBER_OF_TARGETS  # Targets per player
+    number_of_rounds = DEFAULT_NUMBER_OF_ROUNDS  # Number of Rounds
     wait_enter = True  # Wait for enter button to be pushed
 
     gameinfo = GameInfo(
-        screen_size=screen_size,
-        number_of_rounds=number_of_rounds,
-        number_of_targets=number_of_targets,
-        playernames=playernames,
-        wait_enter=wait_enter,
+        screen_size, number_of_rounds, number_of_targets, playernames, wait_enter
     )
 
     app = App(gameinfo, debug=debug)
